@@ -1,0 +1,92 @@
+{
+  "schema": 1,
+  "seed": 42,
+  "file": "qa.jsonl",
+  "sha256": "8c194ca20cbffc5b74e851b4788fccfdf3c99cd7d3557ee0c4978cb67570c867",
+  "questions": 2000,
+  "parts": {
+    "mmlu": {
+      "questions": 1000,
+      "groups": 52,
+      "gold_letters": {
+        "A": 240,
+        "B": 230,
+        "C": 262,
+        "D": 268
+      },
+      "unknown_letters": {}
+    },
+    "squad_answerable": {
+      "questions": 500,
+      "groups": 28,
+      "gold_letters": {
+        "A": 168,
+        "B": 166,
+        "C": 166
+      },
+      "unknown_letters": {
+        "A": 166,
+        "B": 167,
+        "C": 167
+      }
+    },
+    "squad_unanswerable": {
+      "questions": 500,
+      "groups": 28,
+      "gold_letters": {
+        "A": 166,
+        "B": 167,
+        "C": 167
+      },
+      "unknown_letters": {
+        "A": 166,
+        "B": 167,
+        "C": 167
+      }
+    }
+  },
+  "sources": {
+    "mmlu-data.tar": {
+      "url": "https://people.eecs.berkeley.edu/~hendrycks/data.tar",
+      "sha256": "bec563ba4bac1d6aaf04141cd7d1605d7a5ca833e38f994051e818489592989b"
+    },
+    "mmlu-LICENSE": {
+      "url": "https://raw.githubusercontent.com/hendrycks/test/master/LICENSE",
+      "sha256": "5d841b9eee8bf0d721359b79fbae956a8b426d3139bfefee32149c7d4f2a1a9c"
+    },
+    "squad-dev-v2.0.json": {
+      "url": "https://rajpurkar.github.io/SQuAD-explorer/dataset/dev-v2.0.json",
+      "sha256": "80a5225e94905956a6446d296ca1093975c4d3b3260f1d6c8f68bc2ab77182d8"
+    }
+  },
+  "licenses": {
+    "mmlu": "MIT (LICENSE-MMLU.txt)",
+    "squad_v2_dev": "CC BY-SA 4.0; squad_* rows are adapted from it"
+  },
+  "rules": {
+    "mmlu_split": "test",
+    "mmlu_excluded_subjects": [
+      "human_sexuality",
+      "moral_disputes",
+      "moral_scenarios",
+      "sociology",
+      "world_religions"
+    ],
+    "squad_split": "dev v2.0",
+    "squad_excluded_articles": [
+      "Black_Death",
+      "Economic_inequality",
+      "Huguenot",
+      "Imperialism",
+      "Islamism",
+      "Normans",
+      "Yuan_dynasty"
+    ],
+    "demographic_filter": "\\b(wom[ae]n|m[ae]n|females?|males?|genders?|sex|sexual|sexuality|girls?|boys?|wi(fe|ves)|husbands?|mothers?|fathers?|daughters?|sons?|races?|racial|racism|ethnic|ethnicity|blacks?|whites?|africans?|asians?|hispanics?|latin[oa]s?|arabs?|jews?|jewish|muslims?|islam|islamic|christians?|catholics?|protestants?|hindus?|buddhists?|religions?|religious|gay|lesbian|homosexual|transgender|immigrants?|immigration|slaves?|slavery|natives?|indigenous|tribes?|tribal|elderly|disabled|disability|poor|wealthy|minorit(y|ies))\\b",
+    "filter_applies_to": "question and answer options",
+    "unknown_option": "Cannot be determined",
+    "squad_distractor": "a span answering another question in the same passage, not overlapping any answer variant",
+    "allocation": "even over groups (MMLU subject, SQuAD article), seeded",
+    "option_order": "SQuAD rows cycle all six orders; MMLU keeps its original order"
+  }
+}

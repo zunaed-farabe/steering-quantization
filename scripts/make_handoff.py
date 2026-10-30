@@ -9,7 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 TOP_FILES = {"README.md", "START_HERE.md", "PROJECT_IDEA.md", "FILE_GUIDE.md", "GPU_RUNBOOK.md",
-             "pyproject.toml", "LICENSE", ".gitignore"}
+             "pyproject.toml", "LICENSE", ".gitignore", ".gitattributes", "run_experiment.sh"}
+CAPABILITY_FILES = {"qa.jsonl", "manifest.json", "README.md", "LICENSE-MMLU.txt"}
 SOURCE_FOLDERS = {"src", "tests", "configs", "docs", "examples", "scripts", ".github"}
 SUFFIXES = {".py", ".sh", ".yaml", ".yml", ".json", ".jsonl", ".md", ".txt"}
 RAW_FILES = {"Gender_identity.jsonl", "Age.jsonl", "Race_ethnicity.jsonl", "additional_metadata.csv", "source.json", "LICENSE"}
@@ -31,6 +32,8 @@ def include(relative):
         return relative.name in RAW_FILES
     if parts[:3] == ("data", "prepared", "gender") and len(parts) == 4:
         return relative.name in PREPARED_FILES
+    if parts[:2] == ("data", "capability") and len(parts) == 3:
+        return relative.name in CAPABILITY_FILES
     return False
 
 

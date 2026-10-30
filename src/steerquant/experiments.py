@@ -216,7 +216,8 @@ def select(config, output, accuracy_budget=0.02, invalid_budget=0.01, unknown_bu
                               and score["overall"]["invalid_rate"] <= base["overall"]["invalid_rate"] + invalid_budget
                               and score["disambig"]["unknown_rate"] <= base["disambig"]["unknown_rate"] + unknown_budget
                               and score["overall"]["truncation_rate"] <= base["overall"]["truncation_rate"] + invalid_budget)
-                if admissible or source == "none":
+                # Baseline and prompt-only control have nothing to tune; always carry them to test.
+                if admissible or source in {"none", "prompt"}:
                     candidates.append(r)
             if not candidates:
                 diagnostics.append({"precision": precision, "source": source, "status": "no_admissible_setting"})

@@ -39,7 +39,7 @@ def package(destination, artifact_roots=None):
             for f in folder.rglob("*"):
                 if f.is_file() and not f.is_symlink() and f.suffix in {".json", ".jsonl", ".yaml", ".yml", ".csv", ".svg", ".md", ".log", ".txt"}:
                     files[str(f.relative_to(root))] = f
-    for name in ("BUNDLE_INFO.json", "data/raw/bbq/source.json", "data/raw/bbq/LICENSE", "data/prepared/gender/manifest.json", "docs/data-audit.json"):
+    for name in ("BUNDLE_INFO.json", "data/raw/bbq/source.json", "data/raw/bbq/LICENSE", "data/prepared/gender/manifest.json", "data/capability/manifest.json", "docs/data-audit.json"):
         path = root / name
         if path.is_file():
             files[name] = path

@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Runs the whole pilot unattended, in this order:
 #   environment check -> offline tests -> GPU check (BF16/INT8/NF4) -> go/no-go gate
-#   -> main validation sweep -> frozen selection -> held-out test -> [capability] -> results ZIP
+#   -> main validation sweep -> frozen selection -> held-out test -> capability -> results ZIP
 # Finished stages are detected and skipped, so running it again resumes after a
-# crash, reboot or power cut. Launch it with scripts/start_campaign.sh, which
-# detaches it from the terminal so it survives logging out.
+# crash, reboot or power cut. Start it with `bash run_experiment.sh`, which runs
+# it inside tmux so it survives disconnecting.
 #
 # Optional environment variables:
 #   MAX_INVALID, MAX_TRUNCATION  gate limits for the UNSTEERED baseline (default 0.05 each)
 #   SKIP_GATE=1                  continue although the gate failed (only after reading logs/gate.log)
-#   QA_FILE=/path/to/qa.jsonl    also run the held-out capability/neutral-uncertainty evaluation
+#   QA_FILE                      capability QA file (default data/capability/qa.jsonl; set empty to skip)
 set -Eeuo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p logs logs/.done
@@ -27,11 +27,12 @@ MAIN=configs/qwen_gender
 CHECK_ROOT=artifacts/gpu-check
 MAIN_ROOT=artifacts/qwen-gender-seed42
 PRECISIONS=(bf16 int8 nf4)
+QA_FILE=${QA_FILE-data/capability/qa.jsonl}
 STAGE=startup
 
 status() { echo "$(date -u +%FT%TZ) $*" | tee logs/campaign-status.txt; }
-trap 'rc=$?; status "FAILED in stage $STAGE (exit $rc). See logs/$STAGE.log; fix the cause, then run scripts/start_campaign.sh to resume."' ERR
-trap 'status "STOPPED by request during stage $STAGE. Run scripts/start_campaign.sh to resume."; exit 143' TERM INT
+trap 'rc=$?; status "FAILED in stage $STAGE (exit $rc). See logs/$STAGE.log; fix the cause, then run: bash run_experiment.sh"' ERR
+trap 'status "STOPPED during stage $STAGE. Resume with: bash run_experiment.sh"; exit 143' TERM INT HUP
 
 stage() {  # stage <name> <command...>: run and log to logs/<name>.log
   STAGE=$1; shift
@@ -119,8 +120,8 @@ once main-test steerquant evaluate --config "$MAIN.locked.json" --precision all 
   --selection "$MAIN_ROOT/selection.json" --resume
 summarize_once "$MAIN" test reports/gender-test main-test-report
 
-# 6. Optional held-out capability / neutral-uncertainty suite at the same frozen settings.
-if [[ -n ${QA_FILE:-} ]]; then
+# 6. Held-out capability / neutral-uncertainty suite at the same frozen settings.
+if [[ -n $QA_FILE ]]; then
   once main-capability steerquant evaluate --config "$MAIN.locked.json" --precision all --split capability \
     --qa-file "$QA_FILE" --selection "$MAIN_ROOT/selection.json" --resume
   summarize_once "$MAIN" capability reports/gender-capability main-capability-report

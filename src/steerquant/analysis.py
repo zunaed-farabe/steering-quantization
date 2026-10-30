@@ -8,7 +8,7 @@ import numpy as np
 from .config import config_id
 from .experiments import collect_runs
 from .io import ensure_new_directory, write_json
-from .metrics import transitions
+from .metrics import basic_metrics, transitions
 from .steering import load_vectors, vector_path
 
 
@@ -99,7 +99,7 @@ def summarize(config, destination, split="validation", bootstrap=1000):
                     for _, m, _, _ in runs)
         if count != 1:
             raise ValueError(f"Expected exactly one {precision} baseline")
-    output, detailed = [], []
+    output, detailed, by_category = [], [], []
     for directory, meta, rows, score in runs:
         identity, c = meta["identity"], meta["identity"]["condition"]
         precision = identity["model"]["precision"]
@@ -125,6 +125,21 @@ def summarize(config, destination, split="validation", bootstrap=1000):
         output.append(record)
         detailed.append({"run": str(directory), "metrics": score, "paired_vs_own_baseline": comparison,
                          "transitions": transitions(base, rows)})
+        if split == "capability":
+            # Parts (e.g. general knowledge vs answerable/unanswerable reading) answer different questions.
+            detailed[-1]["by_category"] = {}
+            for category in sorted({r["category"] for r in rows}):
+                part = [r for r in rows if r["category"] == category]
+                stats = basic_metrics(part)
+                delta = paired_interval([r for r in base if r["category"] == category], part, None, bootstrap, config["seed"])
+                detailed[-1]["by_category"][category] = {"metrics": stats, "paired_vs_own_baseline": delta}
+                by_category.append({"precision": precision, "source": c["source"], "layer": c["layer"],
+                                    "strength": c["strength"], "operating_points": record["operating_points"],
+                                    "category": category, "n": stats["n"], "accuracy": stats["accuracy"],
+                                    "unknown_rate": stats["unknown_rate"], "invalid_rate": stats["invalid_rate"],
+                                    "accuracy_delta": delta["delta"],
+                                    "accuracy_delta_ci95_low": delta["ci95"][0] if delta["ci95"] else None,
+                                    "accuracy_delta_ci95_high": delta["ci95"][1] if delta["ci95"] else None})
     geometry = []
     reference = load_vectors(vector_path(config, config["precisions"][0]))
     for precision in config["precisions"]:
@@ -144,6 +159,11 @@ def summarize(config, destination, split="validation", bootstrap=1000):
         writer.writerows(output)
     if split == "validation":
         response_svg(output, dest / "response.svg")
+    if by_category:
+        with (dest / "capability_by_category.csv").open("w", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=list(by_category[0]))
+            writer.writeheader()
+            writer.writerows(by_category)
     lines = ["# Steering under weight quantization", "", f"Split: **{split}**. Config: `{config_id(config)[:16]}`.", "",
              "Synthetic smoke results validate plumbing only; real-model results require a GPU run.", "",
              "| Precision | Source | Layer | Strength | Ambiguous acc. | Disambiguated acc. | Invalid |", "|---|---|---:|---:|---:|---:|---:|"]
@@ -151,6 +171,14 @@ def summarize(config, destination, split="validation", bootstrap=1000):
         def fmt(value):
             return f"{value:.3f}" if value is not None else "—"
         lines.append(f"| {r['precision']} | {r['source']} | {r['layer']} | {r['strength']} | {fmt(r['ambig_accuracy'])} | {fmt(r['disambig_accuracy'])} | {fmt(r['invalid_rate'])} |")
+    if by_category:
+        lines += ["", "## By capability part", "", "| Precision | Source | Strength | Part | n | Accuracy | Unknown | Invalid | Δ acc. vs baseline |",
+                  "|---|---|---:|---|---:|---:|---:|---:|---:|"]
+        for r in by_category:
+            def fmt(value):
+                return f"{value:.3f}" if value is not None else "—"
+            lines.append(f"| {r['precision']} | {r['source']} | {r['strength']} | {r['category']} | {r['n']} | {fmt(r['accuracy'])} | "
+                         f"{fmt(r['unknown_rate'])} | {fmt(r['invalid_rate'])} | {fmt(r['accuracy_delta'])} |")
     lines += ["", "Paired 95% intervals resample whole scenario groups. Multiple strengths are exploratory; no multiplicity correction or equivalence claim is made.",
               "See analysis.json for bias denominators, group-pair results, answer transitions, and paired intervals. Missing bias targets reduce annotation coverage; unknown and invalid outputs remain explicit."]
     (dest / "report.md").write_text("\n".join(lines) + "\n")

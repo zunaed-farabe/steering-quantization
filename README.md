@@ -60,7 +60,7 @@ Do not generate new splits after inspecting test results. Small `train_limit` va
 
 ## Run on the GPU machine
 
-For an unattended run that survives disconnects and resumes after interruptions, use `bash scripts/start_campaign.sh`. [GPU_RUNBOOK.md](GPU_RUNBOOK.md) describes it, together with the go/no-go gate it applies after a small all-precision GPU check. The individual commands are:
+To run the whole study, use `bash run_experiment.sh`. It sets up the environment, then runs every step below in a tmux session that survives disconnects, and resumes after interruptions when started again. [GPU_RUNBOOK.md](GPU_RUNBOOK.md) describes it, together with the go/no-go gate it applies after a small all-precision GPU check. The individual commands are:
 
 ```bash
 steerquant extract --config configs/qwen_gender.locked.json --precision all
@@ -84,17 +84,19 @@ Selection maximizes ambiguous-context accuracy subject to disambiguated-accuracy
 
 ## Capability and neutral uncertainty controls
 
-Supply a genuinely held-out JSONL file with `id`, `group`, `question`, `answers` (2–4 strings), and a zero-based `gold`; `context` and `category` are optional. The group field controls the bootstrap unit. Include both answerable and unanswerable demographically neutral contexts. A formatting example is included in `examples/neutral_qa.jsonl`; its three questions are **not an adequate benchmark**.
+The repository includes `data/capability/qa.jsonl`: 2,000 held-out, demographically neutral questions. There are 1,000 MMLU general-knowledge questions, plus 500 answerable and 500 unanswerable SQuAD 2.0 reading questions with a "Cannot be determined" option. `data/capability/README.md` documents it, and `scripts/build_capability_qa.py` rebuilds it deterministically. Any other file needs `id`, `group`, `question`, `answers` (2–4 strings), and a zero-based `gold`. `context`, `category` and a zero-based `unknown` option index are optional. The group field controls the bootstrap unit, and reports break results down by `category`. `examples/neutral_qa.jsonl` only shows the format.
 
 ```bash
 steerquant evaluate --config configs/qwen_gender.locked.json \
-  --split capability --qa-file /path/to/held_out_qa.jsonl \
+  --split capability --qa-file data/capability/qa.jsonl \
   --selection artifacts/qwen-gender-seed42/selection.json
 steerquant summarize --config configs/qwen_gender.locked.json \
   --split capability --output reports/gender-capability
 ```
 
 Capability evaluation uses the same frozen selected settings and keeps steering active while answering. It never chooses settings using capability test answers. Use distinct experiment roots if comparing different capability suites, or combine them into one file with category labels.
+
+Selection always carries the unsteered baseline and the prompt-only control to the test and capability splits. These have no strength to tune, so the validation budgets apply only to steering vectors.
 
 ## Artifacts
 

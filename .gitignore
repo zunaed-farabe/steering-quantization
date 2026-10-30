@@ -5,11 +5,13 @@ __pycache__/
 *.egg-info/
 .env
 .DS_Store
-data/
+# Raw BBQ, prepared splits and the capability QA file are committed (the GPU machine
+# pulls them from git); only the large capability-source downloads are not.
+data/downloads/
 artifacts/
 runs/
 reports/
 *.pt
 *.safetensors
-*.zip
-logs/
+
+

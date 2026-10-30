@@ -1,0 +1,26 @@
+{
+  "files": {
+    "Age.jsonl": {
+      "sha256": "46e805b3fc2d8cbd26eeb8e8430d98cf7b2dc9c83574ff3674e8ce4f0fca2a60",
+      "url": "https://raw.githubusercontent.com/nyu-mll/BBQ/bea11bd97d79217245b5871acd247b9d6eb24598/data/Age.jsonl"
+    },
+    "Gender_identity.jsonl": {
+      "sha256": "8b5adbb368510a97d5775dc43e1c719e0249fe2da33f13c83e3e29edafec7a00",
+      "url": "https://raw.githubusercontent.com/nyu-mll/BBQ/bea11bd97d79217245b5871acd247b9d6eb24598/data/Gender_identity.jsonl"
+    },
+    "LICENSE": {
+      "sha256": "95df2e9564862e51d69683a899b6dcc8218d577057bdf67322880769ff85f29e",
+      "url": "https://raw.githubusercontent.com/nyu-mll/BBQ/bea11bd97d79217245b5871acd247b9d6eb24598/LICENSE"
+    },
+    "Race_ethnicity.jsonl": {
+      "sha256": "4a9f1214cfaa115ce7f0bdb40609122e431f5152c71b8ca64d665e483b946ae6",
+      "url": "https://raw.githubusercontent.com/nyu-mll/BBQ/bea11bd97d79217245b5871acd247b9d6eb24598/data/Race_ethnicity.jsonl"
+    },
+    "additional_metadata.csv": {
+      "sha256": "f36708416b0e7adb81b47ad1926f9c39c2beb611702b73b01e06c9b6c9ffbd3d",
+      "url": "https://raw.githubusercontent.com/nyu-mll/BBQ/bea11bd97d79217245b5871acd247b9d6eb24598/analysis_scripts/additional_metadata.csv"
+    }
+  },
+  "repository": "https://github.com/nyu-mll/BBQ",
+  "revision": "bea11bd97d79217245b5871acd247b9d6eb24598"
+}

@@ -92,7 +92,7 @@ Reports provide paired confidence intervals by resampling whole scenario groups.
 
 ## Next stages
 
-After the first gender pilot: repeat extraction across seeds; add age/race and another model family; define a sufficiently large held-out capability and neutral-uncertainty suite; add an independent generic-uncertainty steering control. Then extend to controlled activation quantization and matched hidden-state downstream-response experiments.
+The first pilot already evaluates a 2,000-question held-out capability and neutral-uncertainty suite at the frozen settings: MMLU general knowledge plus answerable and unanswerable SQuAD 2.0 reading questions. After the first gender pilot: repeat extraction across seeds; add age/race and another model family; add an independent generic-uncertainty steering control. Then extend to controlled activation quantization and matched hidden-state downstream-response experiments.
 
 The first GPU execution is a pipeline/scientific pilot, not a completed publishable study.
 

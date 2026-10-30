@@ -4,16 +4,26 @@ These commands assume Bash on an Ubuntu machine with an NVIDIA GPU of at least 8
 
 The GPU collaborator's job is to execute the fixed pipeline and return all artifacts. No final bias-reduction result is assumed in advance.
 
-**Short version:** do sections 0 and 1 once, then run `bash scripts/start_campaign.sh` (section 2). Everything else runs unattended in the background, and you can turn off the computer you connected from.
+**Short version:** do section 0 once, then from the repository folder run:
+
+```bash
+bash run_experiment.sh
+```
+
+That single script installs whatever is missing, then runs every step below in order inside a tmux session. You can disconnect and turn off the computer you connected from (section 2).
 
 ## 0. Prepare the machine (once)
 
-- **Stop the machine from suspending.** A suspended machine pauses the run. On Ubuntu Desktop, open Settings → Power and set *Automatic Suspend* to Off. On a server, or to be certain, run `sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target`; `unmask` undoes it. `start_campaign.sh` also blocks suspend while it runs, when the system allows it.
+- **Stop the machine from suspending.** A suspended machine pauses the run. On Ubuntu Desktop, open Settings → Power and set *Automatic Suspend* to Off. On a server, or to be certain, run `sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target`; `unmask` undoes it. `run_experiment.sh` also blocks suspend while it runs, when the system allows it.
+- **NVIDIA driver:** `nvidia-smi` must work. Blackwell needs a driver from the 570 series or newer.
+- **sudo:** the first run may ask for your password once, to `apt-get install` tmux and python3-venv if they are missing.
 - **Disk:** keep at least 50 GB free. The model (about 15 GB) goes into the Hugging Face cache, `~/.cache/huggingface` by default, which is outside the project. To use another disk, add `export HF_HOME=/path/to/big/disk/hf-cache` to `~/.bashrc` and open a new terminal before starting.
 - **No Hugging Face token is needed.** `Qwen/Qwen2.5-7B-Instruct` is public and not gated. A token (`export HF_TOKEN=...`) only raises download rate limits. It is never written into artifacts.
 - Do not run other jobs on the GPU during the campaign.
 
-## 1. Create the environment (once)
+## 1. The environment
+
+`run_experiment.sh` does this automatically on its first run: it creates `.venv`, installs a CUDA 12.8 PyTorch build and the project, and runs the GPU diagnostic as the first campaign step. Use a different PyTorch index with `TORCH_INDEX_URL=...`. The manual equivalent, for reference or troubleshooting:
 
 ```bash
 cd /path/to/steering-quantization
@@ -42,40 +52,41 @@ Expected result: `"ready_for_gpu_check": true`, your GPU and its compute capabil
 
 The recorded Mac environment in `docs/local-environment.txt` is for CPU verification only. It is not a CUDA lockfile. If the machine cannot support a requested precision, return the diagnostic instead of silently changing experiment precision.
 
-## 2. Run everything unattended (recommended)
+## 2. Run everything unattended in tmux (recommended)
 
 ```bash
-source .venv/bin/activate
-bash scripts/start_campaign.sh
+cd /path/to/steering-quantization   # your git checkout
+git pull                            # get the latest code and data before starting
+bash run_experiment.sh
 ```
 
-This starts `scripts/run_campaign.sh` in the background, in its own session, so it is not tied to your terminal or SSH connection. Once it prints *Campaign running in the background*, you can close the terminal, disconnect, and turn off your laptop. The job runs on the GPU machine. In order, it:
+The script sets up the environment if needed and starts the experiment in a tmux session named `steerquant`, then shows you its live view. Leave the view with **Ctrl+B, then D**. The experiment keeps running on the GPU machine, so you can close the terminal, disconnect SSH, and turn off your laptop. Everything is also logged to `logs/campaign.log`. In order, it:
 
-1. Checks the GPU environment, runs the offline test suite (32 tests) and the CPU smoke test.
+1. Checks the GPU environment, runs the offline test suite and the CPU smoke test.
 2. Runs the **GPU check** on all three precisions (BF16, LLM.int8(), NF4) with every vector source and control, on 216 validation questions: 14 conditions, 3,024 generations.
 3. Applies the **go/no-go gate** (section 3). It stops here if the gate fails.
 4. Runs the **main campaign**: locks the model revision, extracts vectors and runs the full validation sweep for BF16, then INT8, then NF4. That is 54 conditions × 1,240 questions = 66,960 generations.
 5. Writes the validation report, **freezes the selection**, runs the held-out **test** split once at the frozen settings, and writes the test report.
-6. Optionally runs the capability suite (section 5).
+6. Runs the bundled capability suite (2,000 questions, section 5) at the same frozen settings.
 7. Packages everything into `steering-results-<UTC time>.zip` in the project folder.
 
 No runtime has been measured yet. Expect many hours; LLM.int8() is the slowest precision.
 
-Check on it later, from any SSH session:
+Check on it later, from any SSH session on the GPU machine (run these inside the repository folder):
 
 ```bash
-cat logs/campaign-status.txt     # RUNNING <stage> / STOPPED ... / FAILED in stage ... / DONE
+bash run_experiment.sh status    # RUNNING <stage> / STOPPED ... / FAILED in stage ... / DONE
+bash run_experiment.sh attach    # live view again; leave with Ctrl+B, then D
 tail -n 30 logs/campaign.log     # recent progress; evaluation prints a line every 25 questions
-tail -f logs/campaign.log        # live view; Ctrl+C stops watching, not the job
 ```
 
 Each stage also has its own log at `logs/<stage>.log`.
 
-- **To stop it:** `bash scripts/stop_campaign.sh`.
-- **To resume** after stopping, a failure, a reboot or a power cut, run `bash scripts/start_campaign.sh` again. Finished stages are skipped. Interrupted evaluations continue where they stopped (`--resume`). A finished vector, lock file, selection or report is never recomputed or overwritten.
-- If the status still says `RUNNING` after a reboot, the job was killed by the reboot. Start it again.
+- **To stop it:** `bash run_experiment.sh stop`. Pressing Ctrl+C inside the tmux view does the same. Do not press Ctrl+C in the view unless you mean to stop.
+- **To resume** after stopping, a failure, a reboot or a power cut, run `bash run_experiment.sh` again. Finished stages are skipped. Interrupted evaluations continue where they stopped (`--resume`). A finished vector, lock file, selection or report is never recomputed or overwritten.
+- **After a reboot,** tmux sessions are gone. Just run `bash run_experiment.sh` again.
 
-Do not edit source, configs, package versions or prepared data between starting and finishing. Those changes alter run identities and comparability. If a change is unavoidable, use a fresh artifact root and document it as a new campaign.
+Do not `git pull`, edit source, configs, package versions or data between starting and finishing. Those changes alter run identities and comparability. If a change is unavoidable, use a fresh artifact root and document it as a new campaign.
 
 ## 3. The GPU-check gate
 
@@ -93,9 +104,9 @@ If the campaign stops at the gate (`STOPPED at the GPU-check gate`):
 2. **If the format problem is real,** fix the prompt instruction or the answer parser *before* the main campaign. That is a protocol change, so write it down. Then delete the GPU-check outputs and run it again:
    ```bash
    rm -rf artifacts/gpu-check reports/gpu-check logs/.done/gpu-check-*
-   bash scripts/start_campaign.sh
+   bash run_experiment.sh
    ```
-3. **If you judge the rate acceptable,** continue and record that decision: `SKIP_GATE=1 bash scripts/start_campaign.sh`. Thresholds can also be changed explicitly, e.g. `MAX_INVALID=0.10 bash scripts/start_campaign.sh`.
+3. **If you judge the rate acceptable,** continue and record that decision: `SKIP_GATE=1 bash run_experiment.sh`. Thresholds can also be changed explicitly, e.g. `MAX_INVALID=0.10 bash run_experiment.sh`. The gate is re-checked on every start, so pass the same setting again if you resume later.
 
 Do not use GPU-check accuracy or debiasing scores to redesign the main campaign. The gate is about whether answers can be scored, not about how good they are.
 
@@ -103,7 +114,7 @@ Do not use GPU-check accuracy or debiasing scores to redesign the main campaign.
 
 Use this only if you want to drive each stage yourself. Run it inside `tmux` so it survives disconnects: `tmux new -s steer` to start, Ctrl+B then D to detach, `tmux attach -t steer` to come back. The machine must not suspend (section 0).
 
-The ZIP already contains `data/raw/bbq/` and `data/prepared/gender/`. Do not re-run `fetch-bbq` or `prepare` into those folders, and do not shuffle or recreate the splits.
+The repository already contains `data/raw/bbq/`, `data/prepared/gender/` and `data/capability/`. Do not re-run `fetch-bbq` or `prepare` into those folders, and do not shuffle or recreate the splits.
 
 ```bash
 mkdir -p logs; set -o pipefail
@@ -151,15 +162,23 @@ steerquant summarize --config configs/qwen_gender.locked.json --split test --out
 
 Models are loaded and released by each command. Do not launch the same condition twice concurrently into the same artifact root. Selection records any source with no admissible setting. That is a result, not an error to tune away. Reference settings are also applied unchanged to quantized receivers. Never select strengths by test scores.
 
-## 5. Optional capability/neutral-uncertainty evaluation
+## 5. Capability/neutral-uncertainty evaluation
 
-This handoff does **not** contain an adequate capability benchmark; `examples/neutral_qa.jsonl` only shows the format. Choose a properly sized held-out suite before claiming capability preservation. The QA file needs unique IDs, scenario groups, a question, 2–4 answer choices and a zero-based gold answer. Record its source, license and construction, and keep it unchanged between precisions.
+`data/capability/qa.jsonl` holds 2,000 demographically neutral held-out questions, evaluated at the frozen test settings to check whether steering costs general ability or causes over-abstention:
 
-With the unattended runner, pass it at start: `QA_FILE=/path/to/held_out_qa.jsonl bash scripts/start_campaign.sh`. If the campaign has already finished, the same command runs only the capability stage and packages a new results ZIP. Manually:
+| Part | Questions | Source | What it measures |
+|---|---|---|---|
+| `mmlu` | 1,000 over 52 subjects | MMLU test (MIT) | General knowledge; 4 options. |
+| `squad_answerable` | 500 over 28 articles | SQuAD 2.0 dev (CC BY-SA 4.0) | Reading answerable questions; choosing "Cannot be determined" is an unnecessary abstention. |
+| `squad_unanswerable` | 500 over 28 articles | SQuAD 2.0 dev | Recognising missing evidence; "Cannot be determined" is correct. |
+
+`data/capability/README.md` and `manifest.json` document sources, hashes, exclusions and construction. `scripts/build_capability_qa.py` rebuilds the file byte-identically. The report adds `capability_by_category.csv` and a per-part table, since the three parts answer different questions. The file is never used to choose settings.
+
+The runner evaluates it automatically after the test split. Set `QA_FILE=` (empty) to skip it, or `QA_FILE=/path/to/other.jsonl` to use another file in the same format. Manually:
 
 ```bash
 steerquant evaluate --config configs/qwen_gender.locked.json --precision all --split capability \
-  --qa-file /path/to/held_out_qa.jsonl --selection artifacts/qwen-gender-seed42/selection.json 2>&1 | tee logs/main-capability.log
+  --qa-file data/capability/qa.jsonl --selection artifacts/qwen-gender-seed42/selection.json 2>&1 | tee logs/main-capability.log
 steerquant summarize --config configs/qwen_gender.locked.json --split capability --output reports/gender-capability
 ```
 
@@ -173,10 +192,11 @@ Include a short note: whether all stages finished, the GPU type, and any failure
 
 | Situation | Action |
 |---|---|
-| Status says `FAILED in stage X` | Read `logs/X.log`, fix the cause, run `bash scripts/start_campaign.sh` again. |
+| Status says `FAILED in stage X` | Read `logs/X.log`, fix the cause, run `bash run_experiment.sh` again. |
 | Status says `STOPPED at the GPU-check gate` | See section 3. |
-| Status says `RUNNING` but nothing runs (after reboot) | Run `bash scripts/start_campaign.sh` again; it resumes. |
-| "A campaign is already running here" | It is still running; watch `logs/campaign.log`. Stop it with `scripts/stop_campaign.sh` if needed. |
+| Status says `RUNNING` but `status` reports *not running* (after reboot) | Run `bash run_experiment.sh` again; it resumes. |
+| "The experiment is already running" | It is; the script opens the live view. Stop it with `bash run_experiment.sh stop` if needed. |
+| `tmux: command not found` / venv creation fails | The script installs `tmux` and `python3-venv` with `sudo apt-get`; run it from a terminal where you can enter your password. |
 | No CUDA GPU visible | Check driver/PyTorch CUDA build. Save `logs/gpu_environment.json`. |
 | "No kernels for sm_XXX" | PyTorch build too old for the GPU: reinstall from a CUDA 12.8+ index (section 1). |
 | No BF16 support | Return the diagnostic; do not relabel FP16 as BF16. |

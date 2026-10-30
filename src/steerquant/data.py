@@ -242,8 +242,9 @@ def contrastive_pairs(rows):
 def load_capability(path):
     """External held-out generic QA or neutral uncertainty controls (2–4 choices).
 
-    gold may identify 'cannot determine' when that option is present. This
-    external file must not have been used to choose the steering settings.
+    gold may identify 'cannot determine' when that option is present; the
+    optional zero-based 'unknown' marks that option so abstentions are counted.
+    This external file must not have been used to choose the steering settings.
     """
     rows = read_jsonl(path)
     result = []
@@ -252,9 +253,12 @@ def load_capability(path):
             raise ValueError("Capability QA needs id, group, question, answers (2–4), and gold")
         if type(row["gold"]) is not int or row["gold"] not in range(len(row["answers"])):
             raise ValueError("Invalid capability gold answer")
+        unknown = row.get("unknown", -1)
+        if type(unknown) is not int or unknown not in range(-1, len(row["answers"])):
+            raise ValueError("Invalid capability unknown option")
         result.append({"id": str(row["id"]), "group": str(row["group"]), "category": row.get("category", "capability"),
                        "context": row.get("context", ""), "question": row["question"], "answers": row["answers"],
-                       "gold": row["gold"], "unknown": -1, "target": None,
+                       "gold": row["gold"], "unknown": unknown, "target": None,
                        "context_condition": "capability", "question_polarity": "not_applicable",
                        "answer_info": {f"ans{i}": [a, f"option{i}"] for i, a in enumerate(row["answers"])},
                        "metadata": {"source": str(path)}})
