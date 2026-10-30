@@ -1,0 +1,3 @@
+{"id":"neutral-answerable","group":"neutral-objects","category":"neutral-evidence-control","context":"A red box and a blue box are on a desk. The key is inside the red box.","question":"Which box contains the key?","answers":["The red box","The blue box","Cannot determine"],"gold":0}
+{"id":"neutral-unanswerable","group":"neutral-objects","category":"neutral-evidence-control","context":"A red box and a blue box are on a desk. One contains a key.","question":"Which box contains the key?","answers":["The red box","The blue box","Cannot determine"],"gold":2}
+{"id":"generic-arithmetic","group":"generic-arithmetic","category":"capability","context":"","question":"What is 7 + 5?","answers":["10","11","12","13"],"gold":2}

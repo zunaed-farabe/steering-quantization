@@ -1,0 +1,30 @@
+# Diagnostic only. Separate from the scientific campaign and never used to tune test settings.
+# Exercises every precision (BF16, LLM.int8(), NF4) and every vector source on a small
+# validation subset, so CUDA/bitsandbytes problems and answer-format problems surface in
+# minutes instead of hours into the main campaign. scripts/check_gate.py reads its output.
+seed: 42
+model:
+  id: Qwen/Qwen2.5-7B-Instruct
+  revision: main
+  device: cuda:0
+  compute_dtype: bfloat16
+  attention: eager
+precisions: [bf16, int8, nf4]
+data:
+  prepared: data/prepared/gender
+  train_limit: 16
+  # Whole scenario groups only: 250 resolves to 216 validation questions (3 scenarios).
+  validation_limit: 250
+  test_limit: 16
+steering:
+  layers: [13]
+  method: mean_difference
+  positions: last
+  strengths: [0.0, 0.025]
+  sources: [reference, native, random]
+evaluation:
+  max_new_tokens: 12
+  fairness_prompt: false
+  include_prompt_baseline: true
+output:
+  root: artifacts/gpu-check

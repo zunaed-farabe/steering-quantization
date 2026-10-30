@@ -1,0 +1,27 @@
+# Run `steerquant lock` before model experiments. Paths are relative to launch cwd.
+seed: 42
+model:
+  id: Qwen/Qwen2.5-7B-Instruct
+  revision: main
+  device: cuda:0
+  compute_dtype: bfloat16
+  attention: eager
+precisions: [bf16, int8, nf4]
+data:
+  prepared: data/prepared/gender
+  train_limit: 128
+  validation_limit: null
+  test_limit: null
+steering:
+  layers: [13]
+  method: mean_difference
+  positions: last
+  # Exploratory pilot grid, not an assumed optimum or universal calibration.
+  strengths: [-0.05, -0.025, 0.0, 0.01, 0.025, 0.05, 0.1]
+  sources: [reference, native, random]
+evaluation:
+  max_new_tokens: 12
+  fairness_prompt: false
+  include_prompt_baseline: true
+output:
+  root: artifacts/qwen-gender-seed42
