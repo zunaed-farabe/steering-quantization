@@ -15,3 +15,6 @@ reports/
 *.safetensors
 
 
+# Run-state markers and locks describe artifacts that are not in git; never commit them.
+logs/.done/
+logs/*.lock

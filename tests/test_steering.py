@@ -2,7 +2,7 @@ import pytest
 import torch
 from transformers import LlamaConfig, LlamaForCausalLM
 
-from steerquant.steering import capture, intervene
+from steerquant.steering import capture, intervene, load_vectors
 
 
 @pytest.fixture
@@ -64,3 +64,14 @@ def test_generation_hook_covers_prefill_and_each_cached_step(tiny):
         observer.remove()
     assert observed == [3, 1, 1]
     assert not tiny.model.layers[0]._forward_hooks
+
+
+def test_quantized_vector_metadata_loads_with_weights_only(tmp_path):
+    # Regression: BitsAndBytesConfig.to_dict() holds a QuantizationMethod enum, which
+    # torch.load(weights_only=True) rejects unless metadata is reduced to plain types.
+    from transformers.utils.quantization_config import QuantizationMethod
+    from steerquant.models import plain
+    runtime = plain({"quantization_config": {"quant_method": QuantizationMethod.BITS_AND_BYTES, "load_in_8bit": True}})
+    torch.save({"vectors": {"13": torch.ones(4)}, "metadata": {"runtime": runtime}}, tmp_path / "int8.pt")
+    loaded = load_vectors(tmp_path / "int8.pt")
+    assert loaded["metadata"]["runtime"]["quantization_config"]["quant_method"] == "bitsandbytes"

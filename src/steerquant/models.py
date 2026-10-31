@@ -1,13 +1,25 @@
 """Explicit single-device Transformers backend; quantized models are never recast."""
 
 import gc
+import json
 import re
+import warnings
 from pathlib import Path
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 from .io import digest, file_hash
+
+# LLM.int8() casts BF16 matmul inputs to FP16 by design (see protocol). bitsandbytes
+# warns on every quantized matmul call, which would write millions of identical lines.
+warnings.filterwarnings("ignore", message="MatMul8bitLt: inputs will be cast from")
+
+
+def plain(value):
+    """JSON round trip, so enums such as transformers' QuantizationMethod become plain
+    strings and vector artifacts stay loadable with torch.load(weights_only=True)."""
+    return json.loads(json.dumps(value))
 
 
 def local_revision(path):
@@ -97,7 +109,7 @@ class Backend:
                          "chat_template_sha256": digest(self.tokenizer.chat_template)}
         self.runtime = {**self.identity, "device": m["device"], "requested_dtype": str(dtype),
                         "attention": m["attention"],
-                        "quantization_config": quantization.to_dict() if quantization else None,
+                        "quantization_config": plain(quantization.to_dict()) if quantization else None,
                         "parameter_dtypes": dict(Counter(str(p.dtype) for p in self.model.parameters())),
                         "linear_modules": dict(Counter(type(x).__name__ for x in self.model.modules()
                                                       if "Linear" in type(x).__name__)),
