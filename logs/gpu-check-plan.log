@@ -1,0 +1,55 @@
+{
+  "config": {
+    "seed": 42,
+    "model": {
+      "id": "Qwen/Qwen2.5-7B-Instruct",
+      "revision": "main",
+      "device": "cuda:0",
+      "compute_dtype": "bfloat16",
+      "attention": "eager"
+    },
+    "precisions": [
+      "bf16",
+      "int8",
+      "nf4"
+    ],
+    "data": {
+      "prepared": "data/prepared/gender",
+      "train_limit": 16,
+      "validation_limit": 250,
+      "test_limit": 16
+    },
+    "steering": {
+      "layers": [
+        13
+      ],
+      "strengths": [
+        0.0,
+        0.025
+      ],
+      "method": "mean_difference",
+      "positions": "last",
+      "sources": [
+        "reference",
+        "native",
+        "random"
+      ]
+    },
+    "evaluation": {
+      "max_new_tokens": 12,
+      "fairness_prompt": false,
+      "include_prompt_baseline": true
+    },
+    "output": {
+      "root": "artifacts/gpu-check"
+    }
+  },
+  "validation_conditions": {
+    "bf16": 4,
+    "int8": 5,
+    "nf4": 5
+  },
+  "validation_generations": 3024,
+  "data_fingerprint": "7c917b2a24fe3b02df5934e2390b51807f7bc27fa6ed83d57b93fe7b18f56f8b",
+  "note": "Single device per process; quantized runs require CUDA. Activation quantization is not implemented in v1."
+}

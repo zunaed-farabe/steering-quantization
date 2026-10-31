@@ -1,0 +1,44 @@
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:00<00:00, 474.72it/s]
+evaluate bf16 none layer=None alpha=0.0 validation
+The following generation flags are not valid and may be ignored: ['temperature', 'top_p', 'top_k']. Set `TRANSFORMERS_VERBOSITY=info` for more details.
+  25/216
+  50/216
+  75/216
+  100/216
+  125/216
+  150/216
+  175/216
+  200/216
+evaluate bf16 prompt layer=None alpha=0.0 validation
+  25/216
+  50/216
+  75/216
+  100/216
+  125/216
+  150/216
+  175/216
+  200/216
+evaluate bf16 reference layer=13 alpha=0.025 validation
+  25/216
+  50/216
+  75/216
+  100/216
+  125/216
+  150/216
+  175/216
+  200/216
+evaluate bf16 random layer=13 alpha=0.025 validation
+  25/216
+  50/216
+  75/216
+  100/216
+  125/216
+  150/216
+  175/216
+  200/216
+[
+  "artifacts/gpu-check/runs/validation/bf16-none-5fb5232098c9d608",
+  "artifacts/gpu-check/runs/validation/bf16-prompt-53bea1d4ce5c5134",
+  "artifacts/gpu-check/runs/validation/bf16-reference-1ca13609dde0e674",
+  "artifacts/gpu-check/runs/validation/bf16-random-2b6fedb267c21f7a"
+]

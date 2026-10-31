@@ -1,0 +1,39 @@
+{
+  "python": "3.12.3",
+  "platform": "Linux-6.8.0-146-generic-x86_64-with-glibc2.39",
+  "packages": {
+    "steerquant": "0.1.0",
+    "torch": "2.11.0+cu128",
+    "transformers": "4.57.6",
+    "accelerate": "1.15.0",
+    "bitsandbytes": "0.50.2",
+    "numpy": "2.5.4"
+  },
+  "gpus": [
+    {
+      "index": 0,
+      "name": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+      "compute_capability": "12.0",
+      "total_gib": 94.97021484375,
+      "free_gib": 94.424072265625,
+      "bf16_supported": true
+    }
+  ],
+  "problems": [],
+  "cuda_available": true,
+  "pytorch_cuda_runtime": "12.8",
+  "pytorch_arch_list": [
+    "sm_75",
+    "sm_80",
+    "sm_86",
+    "sm_90",
+    "sm_100",
+    "sm_120"
+  ],
+  "kernel_checks": {
+    "bf16_matmul": true,
+    "int8_linear": true,
+    "nf4_linear": true
+  },
+  "ready_for_gpu_check": true
+}

@@ -1,0 +1,15 @@
+evaluate fp32 none layer=None alpha=0.0 validation
+evaluate fp32 prompt layer=None alpha=0.0 validation
+evaluate fp32 reference layer=0 alpha=-0.05 validation
+evaluate fp32 reference layer=0 alpha=0.05 validation
+evaluate fp32 random layer=0 alpha=-0.05 validation
+evaluate fp32 random layer=0 alpha=0.05 validation
+evaluate fp32 none layer=None alpha=0.0 test
+evaluate fp32 prompt layer=None alpha=0.0 test
+evaluate fp32 random layer=0 alpha=-0.05 test
+evaluate fp32 reference layer=0 alpha=0.05 test
+evaluate fp32 none layer=None alpha=0.0 capability
+evaluate fp32 prompt layer=None alpha=0.0 capability
+evaluate fp32 random layer=0 alpha=-0.05 capability
+evaluate fp32 reference layer=0 alpha=0.05 capability
+"artifacts/offline-smoke"

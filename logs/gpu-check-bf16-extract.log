@@ -1,0 +1,6 @@
+Fetching 4 files:   0%|          | 0/4 [00:00<?, ?it/s]Fetching 4 files:  25%|██▌       | 1/4 [16:55<50:47, 1015.70s/it]Fetching 4 files:  50%|█████     | 2/4 [29:51<29:51, 895.93s/it] Fetching 4 files:  75%|███████▌  | 3/4 [36:31<12:10, 730.65s/it]Fetching 4 files: 100%|██████████| 4/4 [36:32<00:00, 548.04s/it]Fetching 4 files: 100%|██████████| 4/4 [36:32<00:00, 548.04s/it]
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards: 100%|██████████| 4/4 [00:00<00:00, 413.47it/s]
+extract bf16: 50/72 pairs
+[
+  "artifacts/gpu-check/vectors/bf16.pt"
+]
