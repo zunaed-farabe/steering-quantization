@@ -75,3 +75,13 @@ def test_quantized_vector_metadata_loads_with_weights_only(tmp_path):
     torch.save({"vectors": {"13": torch.ones(4)}, "metadata": {"runtime": runtime}}, tmp_path / "int8.pt")
     loaded = load_vectors(tmp_path / "int8.pt")
     assert loaded["metadata"]["runtime"]["quantization_config"]["quant_method"] == "bitsandbytes"
+
+
+def test_int8_cast_notice_is_silenced_but_other_warnings_are_kept(caplog):
+    import logging
+    import steerquant.models  # noqa: F401  installs the filter
+    logger = logging.getLogger("bitsandbytes.autograd._functions")  # as in bitsandbytes 0.50
+    with caplog.at_level(logging.WARNING):
+        logger.warning("MatMul8bitLt: inputs will be cast from %s to float16 during quantization", torch.bfloat16)
+        logger.warning("some other bitsandbytes warning")
+    assert [r.getMessage() for r in caplog.records] == ["some other bitsandbytes warning"]

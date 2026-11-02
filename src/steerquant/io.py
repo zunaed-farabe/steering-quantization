@@ -69,6 +69,26 @@ def environment():
             "git_commit": commit, "git_dirty": dirty, "source_sha256": digest(source)}
 
 
+def load_env_file(path="steerquant.env"):
+    """Apply KEY=VALUE lines from the local, uncommitted settings file (e.g. HF_HOME).
+
+    Variables already set in the environment win. Must run before Hugging Face
+    libraries are imported, since they read HF_HOME at import time.
+    """
+    path = Path(path)
+    if not path.is_file():
+        return {}
+    applied = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = (part.strip() for part in line.split("=", 1))
+        if key and key not in os.environ:
+            os.environ[key] = applied[key] = value.strip("\"'")
+    return applied
+
+
 def ensure_new_directory(path):
     path = Path(path)
     if path.exists() and any(path.iterdir()):

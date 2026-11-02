@@ -20,6 +20,18 @@ cd "$(dirname "$0")"
 SESSION=steerquant
 mkdir -p logs
 
+# Local, uncommitted settings such as HF_HOME (see steerquant.env.example).
+# Variables already set in the shell win.
+if [[ -f steerquant.env ]]; then
+  while IFS='=' read -r key value || [[ -n $key ]]; do
+    key=${key//[[:space:]]/}
+    value=${value%$'\r'}
+    value=${value#"${value%%[![:space:]]*}"}; value=${value%"${value##*[![:space:]]}"}  # trim spaces
+    value=${value#[\"\']}; value=${value%[\"\']}
+    if [[ $key =~ ^[A-Za-z_][A-Za-z0-9_]*$ && -z ${!key+x} ]]; then export "$key=$value"; fi
+  done < steerquant.env
+fi
+
 running() { ! flock -n logs/.experiment.lock true; }
 
 inside() {  # runs inside tmux: install Python packages if needed, then the campaign
@@ -27,6 +39,7 @@ inside() {  # runs inside tmux: install Python packages if needed, then the camp
   if ! flock -n 8; then echo "The experiment is already running."; exit 1; fi
   set +u; source .venv/bin/activate; set -u
   echo "===== $(date -u +%FT%TZ) experiment start/resume ====="
+  echo "Model cache: ${HF_HOME:-$HOME/.cache/huggingface}"
   if ! python -c 'import sys, torch; sys.exit(not torch.cuda.is_available())' 2>/dev/null; then
     echo "Installing PyTorch with CUDA..."
     python -m pip install --upgrade pip
@@ -112,6 +125,7 @@ cache=${HF_HOME:-$HOME/.cache/huggingface}
 probe=$cache
 while [[ ! -d $probe ]]; do probe=$(dirname "$probe"); done
 free_gb=$(( $(df -Pk "$probe" | awk 'NR == 2 {print $4}') / 1024 / 1024 ))
+echo "Model cache: $cache"
 if (( free_gb < 50 )); then
   echo "Warning: only ${free_gb} GB free for the model cache ($cache); about 50 GB is recommended."
 fi

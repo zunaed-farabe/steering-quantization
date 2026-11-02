@@ -2,6 +2,7 @@
 
 import gc
 import json
+import logging
 import re
 import warnings
 from pathlib import Path
@@ -12,8 +13,12 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from .io import digest, file_hash
 
 # LLM.int8() casts BF16 matmul inputs to FP16 by design (see protocol). bitsandbytes
-# warns on every quantized matmul call, which would write millions of identical lines.
-warnings.filterwarnings("ignore", message="MatMul8bitLt: inputs will be cast from")
+# reports this on every quantized matmul call, which would write millions of identical
+# lines. 0.50 logs it via its module logger; older releases used warnings.warn.
+INT8_CAST_NOTICE = "MatMul8bitLt: inputs will be cast from"
+logging.getLogger("bitsandbytes.autograd._functions").addFilter(
+    lambda record: not str(record.msg).startswith(INT8_CAST_NOTICE))
+warnings.filterwarnings("ignore", message=INT8_CAST_NOTICE)
 
 
 def plain(value):

@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 from .config import artifact_root, load_config
-from .io import write_json
+from .io import load_env_file, write_json
 
 
 def parser():
@@ -99,6 +99,7 @@ def dispatch(args):
 
 def main():
     args = parser().parse_args()
+    load_env_file()  # before any model code imports Hugging Face libraries
     try:
         result = dispatch(args)
     except (ValueError, OSError) as exc:

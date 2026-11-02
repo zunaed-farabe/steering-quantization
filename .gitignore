@@ -18,3 +18,5 @@ reports/
 # Run-state markers and locks describe artifacts that are not in git; never commit them.
 logs/.done/
 logs/*.lock
+# Machine-specific settings (copy of steerquant.env.example); may hold a token.
+steerquant.env

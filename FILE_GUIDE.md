@@ -9,6 +9,7 @@
 | `GPU_RUNBOOK.md` | Exact setup and execution commands, recovery guidance, and what to return. |
 | `FILE_GUIDE.md` | This file map. |
 | `README.md` | General installation and developer usage; includes data-download instructions for a fresh checkout. |
+| `steerquant.env.example` | Template for the uncommitted `steerquant.env`: machine-specific settings such as `HF_HOME` (model cache) and an optional `HF_TOKEN`, read by `run_experiment.sh` and every `steerquant` command. |
 | `run_experiment.sh` | **The one command to run the study** on the GPU machine: installs what is missing, then runs every step in a tmux session. Subcommands `status`, `attach`, `stop`; running it again resumes. |
 | `BUNDLE_INFO.json` | Only inside a ZIP built by `scripts/make_handoff.py`: file sizes and SHA-256 hashes. Not needed when the repository is shared through git. |
 

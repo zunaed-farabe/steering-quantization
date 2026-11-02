@@ -17,7 +17,7 @@ That single script installs whatever is missing, then runs every step below in o
 - **Stop the machine from suspending.** A suspended machine pauses the run. On Ubuntu Desktop, open Settings → Power and set *Automatic Suspend* to Off. On a server, or to be certain, run `sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target`; `unmask` undoes it. `run_experiment.sh` also blocks suspend while it runs, when the system allows it.
 - **NVIDIA driver:** `nvidia-smi` must work. Blackwell needs a driver from the 570 series or newer.
 - **sudo:** the first run may ask for your password once, to `apt-get install` tmux and python3-venv if they are missing.
-- **Disk:** keep at least 50 GB free. The model (about 15 GB) goes into the Hugging Face cache, `~/.cache/huggingface` by default, which is outside the project. To use another disk, add `export HF_HOME=/path/to/big/disk/hf-cache` to `~/.bashrc` and open a new terminal before starting.
+- **Disk and model cache:** keep at least 50 GB free. The model (about 15 GB) goes into the Hugging Face cache, `~/.cache/huggingface` by default. To pin it to one place for every run and every experiment, copy `steerquant.env.example` to `steerquant.env` and set `HF_HOME` there; git ignores that file. `run_experiment.sh` and all `steerquant` commands read it. Also add `export HF_HOME=...` to `~/.bashrc` so other tools agree. Each run prints `Model cache: ...` at the start; if it ever shows a different folder, the model would be downloaded again.
 - **No Hugging Face token is needed.** `Qwen/Qwen2.5-7B-Instruct` is public and not gated. A token (`export HF_TOKEN=...`) only raises download rate limits. It is never written into artifacts.
 - Do not run other jobs on the GPU during the campaign.
 
