@@ -141,9 +141,7 @@ def evaluate(config, precision, split="validation", selection_path=None, resume=
                     target_layer = backend.layers[layer] if layer is not None else None
                     with intervene(target_layer, vector, strength * scale):
                         text, tokens = backend.generate(prompt(row, config["evaluation"]["fairness_prompt"] or source == "prompt"))
-                    eos = backend.tokenizer.eos_token_id
-                    eos_ids = eos if isinstance(eos, list) else [eos]
-                    truncated = len(tokens) >= config["evaluation"]["max_new_tokens"] and bool(tokens) and tokens[-1] not in eos_ids
+                    truncated = len(tokens) >= config["evaluation"]["max_new_tokens"] and bool(tokens) and tokens[-1] not in backend.eos_token_ids
                     result = {**row, "raw_output": text, "generated_tokens": tokens,
                               "prediction": parse_answer(text, len(row["answers"])), "truncated": truncated}
                     stream.write(json.dumps(result, sort_keys=True, allow_nan=False) + "\n")
@@ -219,29 +217,41 @@ def select(config, output, accuracy_budget=0.02, invalid_budget=0.01, unknown_bu
                 # Baseline and prompt-only control have nothing to tune; always carry them to test.
                 if admissible or source in {"none", "prompt"}:
                     candidates.append(r)
+            vector_source = source in {"reference", "native", "random"}
             if not candidates:
-                diagnostics.append({"precision": precision, "source": source, "status": "no_admissible_setting"})
+                diagnostics.append({"precision": precision, "source": source, "status": "no_admissible_nonzero_setting"})
+            # A vector may do nothing: every nonzero dose must beat no intervention,
+            # and zero wins validation ties, so a no-op is never reported as steering.
+            if vector_source:
+                candidates.append(baseline)
+            if not candidates:
                 continue
             # Avoid rewarding group guessing: prioritize correct uncertainty on ambiguous QA.
             best = max(candidates, key=lambda r: (r[3]["ambig"]["accuracy"], r[3]["disambig"]["accuracy"],
                                                   -abs(r[1]["identity"]["condition"]["strength"])))
-            choices.append({"precision": precision, "condition": best[1]["identity"]["condition"],
-                            "operating_points": ["baseline" if source in {"none", "prompt"} else "recalibrated"],
+            no_intervention = vector_source and best is baseline
+            condition = {"source": source, "layer": None, "strength": 0.0} if no_intervention else best[1]["identity"]["condition"]
+            if no_intervention:
+                diagnostics.append({"precision": precision, "source": source, "status": "baseline_preferred"})
+            choices.append({"precision": precision, "condition": condition,
+                            "operating_points": ["no_intervention" if no_intervention else "baseline" if source in {"none", "prompt"} else "recalibrated"],
                             "validation_run": str(best[0]), "validation_run_id": best[1]["run_id"],
                             "validation_predictions_sha256": best[1]["predictions_sha256"]})
     # Test unchanged deployment as well as per-precision recalibration. Settings
     # are selected ONLY on reference validation, then copied to quantized receivers.
     original = next((c for c in choices if c["precision"] == config["precisions"][0]
                      and c["condition"]["source"] == "reference"), None)
-    if original:
+    if original and original["condition"]["layer"] is not None:
         for precision in config["precisions"]:
             existing = next((c for c in choices if c["precision"] == precision and c["condition"] == original["condition"]), None)
             if existing:
                 existing["operating_points"].append("unchanged_reference")
             else:
                 choices.append({**original, "precision": precision, "operating_points": ["unchanged_reference"]})
+    elif original:
+        diagnostics.append({"precision": config["precisions"][0], "source": "reference", "status": "no_nonzero_reference_selected"})
     result = {"schema": 1, "config_id": config_id(config), "data_fingerprint": manifest["fingerprint"],
-              "rule": "maximize ambiguous accuracy subject to disambiguated accuracy, unknown, invalid and truncation budgets",
+              "rule": "maximize ambiguous accuracy subject to disambiguated accuracy, unknown, invalid and truncation budgets; zero intervention eligible and preferred on ties",
               "budgets": {"accuracy_drop": accuracy_budget, "invalid_increase": invalid_budget, "unknown_increase": unknown_budget},
               "choices": choices, "diagnostics": diagnostics}
     result["fingerprint"] = digest(result)

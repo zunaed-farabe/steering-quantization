@@ -21,10 +21,11 @@ def parser():
     prep.add_argument("--seed", type=int, default=42)
     for name, help_text in (("lock", "Resolve an immutable model revision"), ("plan", "Inspect configuration and evaluation budget"),
                             ("extract", "Extract and save per-precision steering vectors"), ("evaluate", "Run a validation sweep or frozen held-out settings"),
-                            ("select", "Freeze settings selected on validation"), ("summarize", "Produce CSV, JSON, Markdown, and validation curves")):
+                            ("select", "Freeze settings selected on validation"), ("summarize", "Produce CSV, JSON, Markdown, and validation curves"),
+                            ("dose-check", "Apply the pre-set BF16 pass rule to a dose-finding sweep")):
         sub = commands.add_parser(name, help=help_text)
         sub.add_argument("--config", required=True)
-        if name in {"lock", "select", "summarize"}:
+        if name in {"lock", "select", "summarize", "dose-check"}:
             sub.add_argument("--output", required=True)
         if name in {"extract", "evaluate"}:
             sub.add_argument("--precision", choices=["all", "bf16", "fp32", "int8", "nf4"], default="all")
@@ -94,6 +95,9 @@ def dispatch(args):
     if args.command == "summarize":
         from .analysis import summarize
         return str(summarize(config, args.output, args.split, args.bootstrap))
+    if args.command == "dose-check":
+        from .dose import check
+        return check(config, args.output)
     raise ValueError("Unknown command")
 
 

@@ -13,7 +13,7 @@ This package contains the experimental code, prepared data, and instructions for
 
 ## What is included
 
-- Independently implemented Python research package, CLI, and 34 offline tests (31 pipeline tests plus 3 handoff/diagnostic checks).
+- Independently implemented Python research package, CLI, and 49 offline tests, including Gemma2 support and the dose-finding pass rule.
 - Main experiment config and a smaller GPU-check config covering BF16, INT8 and NF4.
 - Official BBQ gender, age, and race raw data; scoring metadata; provenance and dataset license.
 - Ready-to-use, audited gender train/validation/test files and manifest. The initial experiment uses only gender.

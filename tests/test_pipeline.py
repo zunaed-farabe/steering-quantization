@@ -13,7 +13,11 @@ def test_offline_end_to_end_and_artifact_integrity(tmp_path):
     config = load_config(dest / "config.json")
     selection = read_json(dest / "selection.json")
     assert selection["choices"]
-    assert any("unchanged_reference" in c["operating_points"] for c in selection["choices"])
+    reference = next(c for c in selection["choices"] if c["condition"]["source"] == "reference")
+    if reference["condition"]["strength"]:
+        assert "unchanged_reference" in reference["operating_points"]
+    else:
+        assert "no_intervention" in reference["operating_points"]
     assert (dest / "validation-report" / "response.svg").exists()
     assert (dest / "test-report" / "metrics.csv").exists()
     assert (dest / "capability-report" / "metrics.csv").exists()

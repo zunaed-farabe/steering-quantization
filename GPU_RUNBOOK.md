@@ -12,13 +12,28 @@ bash run_experiment.sh
 
 That single script installs whatever is missing, then runs every step below in order inside a tmux session. You can disconnect and turn off the computer you connected from (section 2).
 
+## Current step: BF16 dose finding
+
+Run 1 changed almost no answers, so the next step is a BF16-only test on Qwen and Gemma before any quantization. It uses the same machine setup as section 0. Its rule and how to read the result are in [docs/dose-finding.md](docs/dose-finding.md).
+
+Gemma is gated. Accept its terms at https://huggingface.co/google/gemma-2-9b-it, then create a read token and add it to `steerquant.env`:
+
+```bash
+git pull
+cp -n steerquant.env.example steerquant.env   # keeps an existing file
+nano steerquant.env                           # add HF_TOKEN=hf_...
+bash run_experiment.sh dose
+```
+
+It runs in the same tmux session: `status`, `attach` and `stop` work as in section 2, and `bash run_experiment.sh dose` resumes it. Nothing from the first campaign is reused or changed. The verdicts are `reports/dose-qwen/verdict.md` and `reports/dose-gemma/verdict.md`, and the zip is `dose-results-<time>.zip`.
+
 ## 0. Prepare the machine (once)
 
 - **Stop the machine from suspending.** A suspended machine pauses the run. On Ubuntu Desktop, open Settings → Power and set *Automatic Suspend* to Off. On a server, or to be certain, run `sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target`; `unmask` undoes it. `run_experiment.sh` also blocks suspend while it runs, when the system allows it.
 - **NVIDIA driver:** `nvidia-smi` must work. Blackwell needs a driver from the 570 series or newer.
 - **sudo:** the first run may ask for your password once, to `apt-get install` tmux and python3-venv if they are missing.
 - **Disk and model cache:** keep at least 50 GB free. The model (about 15 GB) goes into the Hugging Face cache, `~/.cache/huggingface` by default. To pin it to one place for every run and every experiment, copy `steerquant.env.example` to `steerquant.env` and set `HF_HOME` there; git ignores that file. `run_experiment.sh` and all `steerquant` commands read it. Also add `export HF_HOME=...` to `~/.bashrc` so other tools agree. Each run prints `Model cache: ...` at the start; if it ever shows a different folder, the model would be downloaded again.
-- **No Hugging Face token is needed.** `Qwen/Qwen2.5-7B-Instruct` is public and not gated. A token (`export HF_TOKEN=...`) only raises download rate limits. It is never written into artifacts.
+- **No Hugging Face token is needed for Qwen.** `Qwen/Qwen2.5-7B-Instruct` is public and not gated; Gemma needs one. A token (`export HF_TOKEN=...`) only raises download rate limits. It is never written into artifacts.
 - Do not run other jobs on the GPU during the campaign.
 
 ## 1. The environment

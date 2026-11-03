@@ -65,3 +65,22 @@ def test_gpu_diagnostic_records_a_report_without_exposing_environment(monkeypatc
     result = module.diagnostic()
     assert "ready_for_gpu_check" in result
     assert "not-a-real-token-test-sentinel" not in json.dumps(result)
+
+
+def test_result_packager_can_keep_one_campaign_and_records_executed_source(tmp_path, monkeypatch):
+    module = helper("package_results")
+    root = tmp_path / "project"
+    monkeypatch.setattr(module, "__file__", str(root / "scripts/package_results.py"))
+    for name in ("artifacts/dose-qwen/run.json", "artifacts/qwen-gender-seed42/run.json", "logs/dose-qwen-extract.log",
+                 "logs/campaign.log", "reports/dose-qwen/verdict.md", "reports/gender-test/report.md",
+                 "configs/dose_qwen.locked.json", "src/steerquant/models.py", "scripts/run_dose.sh"):
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("fixture")
+    path, _ = module.package(tmp_path / "dose.zip", ["artifacts/dose-qwen"], "dose")
+    with zipfile.ZipFile(path) as archive:
+        names = {name.removeprefix("steering-results/") for name in archive.namelist()}
+    assert {"artifacts/dose-qwen/run.json", "logs/dose-qwen-extract.log", "reports/dose-qwen/verdict.md",
+            "configs/dose_qwen.locked.json", "source_snapshot/src/steerquant/models.py",
+            "source_snapshot/scripts/run_dose.sh"} <= names
+    assert not {"artifacts/qwen-gender-seed42/run.json", "logs/campaign.log", "reports/gender-test/report.md"} & names

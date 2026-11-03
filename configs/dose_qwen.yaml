@@ -1,0 +1,30 @@
+# Dose finding, BF16 only, validation only (docs/dose-finding.md). The pass rule was fixed
+# before this was run. Never evaluate the test split here.
+seed: 42
+model:
+  id: Qwen/Qwen2.5-7B-Instruct
+  revision: main
+  device: cuda:0
+  compute_dtype: bfloat16
+  attention: eager
+precisions: [bf16]
+data:
+  prepared: data/prepared/gender
+  train_limit: 128
+  validation_limit: null
+  test_limit: null
+steering:
+  # About 30%, 50% and 70% of 28 blocks; 13 is the layer of run 1.
+  layers: [8, 13, 20]
+  method: mean_difference
+  positions: last
+  # Strength is a fraction of the mean activation norm. On Qwen, 0.15 is about the
+  # multiplier of 2 in Rimsky et al., and 0.6 about 8 times the raw vector.
+  strengths: [-0.6, -0.3, -0.15, -0.1, 0.0, 0.1, 0.15, 0.3, 0.6]
+  sources: [reference, random]
+evaluation:
+  max_new_tokens: 12
+  fairness_prompt: false
+  include_prompt_baseline: true
+output:
+  root: artifacts/dose-qwen

@@ -17,3 +17,9 @@ The gender data was re-split with identity stratification. The original unstrati
 Not yet executed: Qwen2.5-7B inference, real bias-reduction measurements, CUDA LLM.int8()/NF4 execution, the capability suite on a real model, or activation quantization. These are not implied by passing offline tests. The selected GPU environment is still undecided.
 
 The three QA examples bundled in `examples/` are schema examples, not a validation set. Synthetic smoke reports are plumbing diagnostics, not study results. See `local-environment.txt` for the CPU test dependencies and `protocol.md` for experimental boundaries.
+
+## Dose finding and merged Gemma support
+
+Merged from the Gemma handoff: the Gemma2 adapter, checkpoint stop IDs, zero intervention in selection, and the executed-source snapshot in result archives. Added: the BF16 dose-finding configs, runner and pass rule (`docs/dose-finding.md`). The handoff's `gender-run1` split was not copied because its three files are byte-identical to `data/prepared/gender/`.
+
+The laptop used for this change has no PyTorch or Transformers, so **the full suite has not been run on this revision**. `run_dose.sh` runs it first on the GPU machine. Checked here, with stand-in modules for those libraries: the data, metrics, dose-rule, packaging and selection tests pass. Not exercised: real Gemma2 forward passes, stop tokens on a real checkpoint, and the end-to-end pipeline tests. `run_dose.sh` was dry-run with fake commands through a failure and a resume. The pass rule was applied to run 1's real Qwen validation predictions and returned FAIL, 0 of 6 settings, as expected.

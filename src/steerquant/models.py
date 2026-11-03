@@ -50,7 +50,7 @@ def lock_config(config):
 
 def blocks(model):
     # These supported families expose residual block outputs at model.layers.
-    if model.config.model_type not in {"llama", "qwen2", "mistral"}:
+    if model.config.model_type not in {"llama", "qwen2", "mistral", "gemma2"}:
         raise ValueError(f"Unsupported architecture: {model.config.model_type}; add an explicit adapter")
     return model.model.layers
 
@@ -101,6 +101,9 @@ class Backend:
         if quantization is not None:
             kwargs.update(quantization_config=quantization, device_map={"": m["device"]})
         self.model = AutoModelForCausalLM.from_pretrained(m["id"], **kwargs)
+        # Gemma stops at end_of_turn as well as EOS, so keep every checkpoint stop ID
+        # rather than replacing them with the tokenizer's single EOS token.
+        self.eos_token_ids = stopping_ids(self.model, self.tokenizer)
         if quantization is None:
             self.model.to(m["device"])
         self.model.eval()
@@ -114,6 +117,7 @@ class Backend:
                          "chat_template_sha256": digest(self.tokenizer.chat_template)}
         self.runtime = {**self.identity, "device": m["device"], "requested_dtype": str(dtype),
                         "attention": m["attention"],
+                        "eos_token_ids": self.eos_token_ids,
                         "quantization_config": plain(quantization.to_dict()) if quantization else None,
                         "parameter_dtypes": dict(Counter(str(p.dtype) for p in self.model.parameters())),
                         "linear_modules": dict(Counter(type(x).__name__ for x in self.model.modules()
@@ -144,7 +148,7 @@ class Backend:
             output = self.model.generate(**inputs, do_sample=False,
                                          max_new_tokens=self.config["evaluation"]["max_new_tokens"],
                                          pad_token_id=self.tokenizer.pad_token_id,
-                                         eos_token_id=self.tokenizer.eos_token_id, use_cache=True)
+                                         eos_token_id=self.eos_token_ids or None, use_cache=True)
         new = output[0, inputs["input_ids"].shape[1]:]
         return self.tokenizer.decode(new, skip_special_tokens=True).strip(), new.tolist()
 
@@ -154,3 +158,12 @@ class Backend:
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+
+
+def stopping_ids(model, tokenizer):
+    """Prefer the checkpoint's generation policy, then fall back to the tokenizer."""
+    value = getattr(model.generation_config, "eos_token_id", None)
+    if value is None:
+        value = tokenizer.eos_token_id
+    values = value if isinstance(value, (tuple, list)) else [value]
+    return list(dict.fromkeys(int(item) for item in values if item is not None))

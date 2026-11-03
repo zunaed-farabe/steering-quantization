@@ -5,13 +5,15 @@
 #   bash run_experiment.sh           first time: installs what is missing, then starts the experiment.
 #                                    later: resumes after a stop, failure or reboot (finished steps are
 #                                    skipped), or just re-opens the view if it is still running.
+#   bash run_experiment.sh dose      runs the BF16 dose finding instead (docs/dose-finding.md);
+#                                    run it again to resume
 #   bash run_experiment.sh status    current step, or DONE / FAILED / STOPPED
 #   bash run_experiment.sh attach    open the live view (leave it with Ctrl+B, then D)
 #   bash run_experiment.sh stop      stop it; finished work is kept, run again to resume
 #
 # Optional settings go in front, e.g. `SKIP_GATE=1 bash run_experiment.sh`:
 #   HF_HOME          where the ~15 GB model is cached (default ~/.cache/huggingface)
-#   HF_TOKEN         Hugging Face token; not required (the model is public)
+#   HF_TOKEN         Hugging Face token; needed for Gemma (gated), not for Qwen
 #   MAX_INVALID, MAX_TRUNCATION, SKIP_GATE   GPU-check gate settings (GPU_RUNBOOK.md section 3)
 #   QA_FILE          capability QA file (default data/capability/qa.jsonl; empty to skip)
 #   TORCH_INDEX_URL  PyTorch wheel index (default CUDA 12.8 builds, needed for Blackwell)
@@ -53,7 +55,7 @@ inside() {  # runs inside tmux: install Python packages if needed, then the camp
     python -m pip check || echo "Warning: pip check reported the issues above."
     echo "$stamp" > .venv/.steerquant-installed
   fi
-  local runner=(bash scripts/run_campaign.sh)
+  local runner=(bash "${CAMPAIGN:-scripts/run_campaign.sh}")
   if command -v systemd-inhibit >/dev/null && systemd-inhibit --what=sleep:idle --who=steerquant --why=probe true >/dev/null 2>&1; then
     runner=(systemd-inhibit --what=sleep:idle --who=steerquant --why="steering experiment running" "${runner[@]}")
   else
@@ -88,8 +90,9 @@ case "${1:-start}" in
     echo "Stopped. Last status: $(cat logs/campaign-status.txt 2>/dev/null)"
     exit 0 ;;
   start) ;;
+  dose) CAMPAIGN=scripts/run_dose.sh ;;
   *)
-    echo "Usage: bash run_experiment.sh [start|status|attach|stop]"
+    echo "Usage: bash run_experiment.sh [start|dose|status|attach|stop]"
     exit 1 ;;
 esac
 
@@ -133,7 +136,7 @@ fi
 # A finished, failed or stopped earlier session is replaced; the campaign resumes from its records.
 tmux kill-session -t "$SESSION" 2>/dev/null || true
 settings=(-e "QA_FILE=${QA_FILE-data/capability/qa.jsonl}")
-for var in HF_HOME HF_TOKEN MAX_INVALID MAX_TRUNCATION SKIP_GATE TORCH_INDEX_URL; do
+for var in HF_HOME HF_TOKEN MAX_INVALID MAX_TRUNCATION SKIP_GATE TORCH_INDEX_URL CAMPAIGN; do
   if [[ -n ${!var:-} ]]; then settings+=(-e "$var=${!var}"); fi
 done
 tmux new-session -d -s "$SESSION" -c "$PWD" "${settings[@]}" "bash run_experiment.sh __window"

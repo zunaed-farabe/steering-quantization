@@ -20,6 +20,7 @@
 | `pyproject.toml` | Python package metadata, dependencies, optional quantization/test dependencies, CLI entry point, and pytest settings. |
 | `configs/qwen_gender.yaml` | Full gender pilot: BF16/INT8/NF4, extraction sample, layer, strength grid, controls, and output root. |
 | `configs/qwen_gender_gpu_check.yaml` | Small diagnostic on all three precisions and every vector source (216 validation questions) before spending GPU time on the full campaign. Its outputs are separate. |
+| `configs/dose_qwen.yaml`, `configs/dose_gemma.yaml` | BF16-only dose finding on validation: 3 layers, strengths ±0.1 to ±0.6, bias vector and random control. |
 | `configs/*.locked.json` | Created on the GPU machine by `steerquant lock`; captures exact checkpoint revision and resolved settings. |
 | `.gitignore` | Excludes environments, capability-source downloads, credentials, caches, result folders, logs, and ZIPs from Git. BBQ data, prepared splits and the capability file are committed. |
 | `.gitattributes` | Keeps data files byte-exact (their hashes are checked) and shell scripts LF-only, even when committing from Windows. |
@@ -40,6 +41,7 @@
 | `metrics.py` | Strict letter parsing; accuracy, invalidity, truncation, unknown and stereotypical-error rates; signed BBQ scores; group-pair metrics; answer-transition counts. |
 | `analysis.py` | Paired scenario-cluster bootstrap intervals, vector geometry, CSV/JSON/Markdown reports, and validation response curves in SVG. |
 | `io.py` | JSON/JSONL IO, atomic JSON writes, SHA-256 fingerprints, source/environment metadata, and overwrite protection. |
+| `dose.py` | The fixed BF16 pass rule (`steerquant dose-check`) and its verdict report. |
 | `smoke.py` | Generates an entirely local tiny random model and synthetic questions, then exercises the complete workflow. Not a bias experiment. |
 
 ## Helpers and tests
@@ -48,6 +50,9 @@
 |---|---|
 | `scripts/run_campaign.sh` | The pipeline that `run_experiment.sh` runs: environment check, tests, GPU check, gate, main validation, selection, test, capability, packaging. Skips finished stages, so it resumes. |
 | `scripts/build_capability_qa.py` | Downloads MMLU and SQuAD 2.0 (pinned hashes) and rebuilds `data/capability/qa.jsonl` deterministically. Already run; only needed to reproduce or change the file. |
+| `scripts/run_dose.sh` | The BF16 dose-finding run, started with `bash run_experiment.sh dose`. Skips finished stages, so it resumes. |
+| `scripts/campaign_lib.sh` | Stage, status, locking and resume helpers shared by both runners. |
+| `scripts/check_model_access.py` | Stops early with a clear message if a gated model cannot be read. |
 | `scripts/check_gate.py` | Go/no-go gate after the GPU check: all runs complete, finite vectors, and at most 5% invalid/truncated unsteered answers per precision. |
 | `scripts/check_gpu.py` | Saves a GPU/package/environment diagnostic before downloading the full model, including PyTorch architecture support and tiny real BF16/INT8/NF4 kernel runs. |
 | `scripts/package_results.py` | Packages artifacts, reports, logs, locked configs, and data provenance to return to the study owner. Excludes environments and model caches. |
@@ -55,6 +60,8 @@
 | `tests/conftest.py` | Offline test environment and synthetic dataset fixtures. |
 | `tests/test_data.py` | Group isolation, target correctness, answer-position balance, metadata validation, and manifest tampering. |
 | `tests/test_metrics.py` | Strict parsing and hand-computed bias/accuracy/abstention/transition checks. |
+| `tests/test_dose.py` | The dose-finding pass rule, on fixtures covering pass, no better than random, too small, over-abstaining, and unscoreable baselines. |
+| `tests/test_gemma.py` | Tiny random Gemma2 forward and intervention, end-of-turn stopping, stop-ID fallback, zero-intervention selection, prompt control carried to test. |
 | `tests/test_steering.py` | Block-output indexing, zero-strength behavior, last-position effects, cleanup, and cached-generation coverage. |
 | `tests/test_pipeline.py` | End-to-end offline workflow, frozen selection, resume/integrity checks, control conditions, and bootstrap units. |
 | `tests/test_handoff.py` | Archive completeness/checksums, exclusion of environments/model weights, partial-result packaging, and credential-free diagnostics. |
@@ -81,6 +88,7 @@
 
 | File | Purpose |
 |---|---|
+| `docs/dose-finding.md` | The BF16 dose-finding step: what runs, the pass rule fixed before running, and how to read the result. |
 | `docs/protocol.md` | Exact scientific and implementation conventions, assumptions, limits, and future work. |
 | `docs/verification.md` | What has been tested and what still requires GPU execution. |
 | `docs/data-audit.json` | Actual upstream/split hashes and the training-pair audit. |
@@ -99,6 +107,7 @@
 | `runs/.../run.json` | A condition's identity, expected size, completion status, runtime/package/source metadata, and output hashes. |
 | `runs/.../predictions.jsonl` | Original example metadata, generated text/tokens, parsed prediction, and truncation flag. |
 | `runs/.../metrics.json` | That condition's computed metrics. |
+| `artifacts/dose-qwen/`, `artifacts/dose-gemma/` | Dose-finding vectors and validation runs. |
 | `reports/` | `metrics.csv`, `analysis.json`, `report.md`, validation `response.svg`, and for capability `capability_by_category.csv`. |
 | `logs/` | Setup, GPU diagnostic, and per-stage run logs. The runner adds `campaign.log` (everything), `campaign-status.txt` (current stage or DONE/FAILED/STOPPED), `gate.log`/`gate.json`, `.done/` stage markers, and lock files. |
 | `steering-results-<time>.zip` | Results archive created at the end of an unattended run. |
