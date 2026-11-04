@@ -13,7 +13,9 @@ import steerquant.dose as dose
 from steerquant.experiments import evaluate
 from steerquant.io import read_json, read_jsonl
 from steerquant.scan import scan
-from steerquant.smoke import setup_smoke
+from steerquant.data import prepare
+from steerquant.io import write_jsonl
+from steerquant.smoke import fixture_rows, setup_smoke
 from steerquant.steering import extract, load_vectors
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,10 +27,34 @@ def smoke_config(tmp_path):
     return setup_smoke(tmp_path / "smoke")
 
 
-def test_stereotype_vector_differs_from_evidence_and_records_its_geometry(smoke_config, tmp_path):
-    evidence = deepcopy(smoke_config)
-    evidence["output"]["root"] = str(tmp_path / "evidence")
+def polarity_worded(tmp_path):
+    """The smoke questions, with BBQ-like different wording for each question polarity."""
+    rows = fixture_rows()
+    for row in rows:
+        if row["question_polarity"] == "nonneg":
+            row["question"] = "Who did not move the object at all?"
+    write_jsonl(tmp_path / "polar.jsonl", rows)
+    prepare(tmp_path / "polar.jsonl", tmp_path / "polar-prepared", seed=42)
+    return str(tmp_path / "polar-prepared")
+
+
+def test_stereotype_contrast_cancels_when_both_polarities_are_worded_identically(smoke_config, tmp_path):
+    # The target flips with question polarity, so with identical wording the paired rows
+    # contrast the same two activations in opposite directions and sum to exactly zero.
+    # Only the polarity-dependent part survives: whether the answer fits the stereotype.
     stereotype = deepcopy(smoke_config)
+    stereotype["steering"]["contrast"] = "stereotype"
+    stereotype["output"]["root"] = str(tmp_path / "identical")
+    with pytest.raises(ValueError, match="Degenerate"):
+        extract(stereotype, "fp32")
+
+
+def test_stereotype_vector_differs_from_evidence_and_records_its_geometry(smoke_config, tmp_path):
+    prepared = polarity_worded(tmp_path)
+    evidence = deepcopy(smoke_config)
+    evidence["data"]["prepared"] = prepared
+    evidence["output"]["root"] = str(tmp_path / "evidence")
+    stereotype = deepcopy(evidence)
     stereotype["steering"]["contrast"] = "stereotype"
     stereotype["output"]["root"] = str(tmp_path / "stereotype")
     old, new = load_vectors(extract(evidence, "fp32")), load_vectors(extract(stereotype, "fp32"))
