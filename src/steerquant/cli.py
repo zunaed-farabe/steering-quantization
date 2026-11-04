@@ -41,6 +41,9 @@ def parser():
             sub.add_argument("--unknown-budget", type=float, default=0.02)
         if name == "summarize":
             sub.add_argument("--bootstrap", type=int, default=1000)
+    scan = commands.add_parser("bias-scan", help="Describe unsteered and prompt baselines across categories and models")
+    scan.add_argument("--config", nargs="+", required=True, help="Locked configs with complete validation baselines")
+    scan.add_argument("--output", required=True, help="JSON path; a Markdown table is written next to it")
     smoke = commands.add_parser("smoke", help="Offline tiny random-model end-to-end integration test")
     smoke.add_argument("--output", required=True)
     return p
@@ -56,6 +59,9 @@ def dispatch(args):
     if args.command == "smoke":
         from .smoke import run_smoke
         return str(run_smoke(args.output))
+    if args.command == "bias-scan":
+        from .scan import scan
+        return scan([load_config(path) for path in args.config], args.output)
     config = load_config(args.config)
     if args.command == "lock":
         from .models import lock_config

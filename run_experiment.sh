@@ -7,6 +7,8 @@
 #                                    skipped), or just re-opens the view if it is still running.
 #   bash run_experiment.sh dose      runs the BF16 dose finding instead (docs/dose-finding.md);
 #                                    run it again to resume
+#   bash run_experiment.sh run3      runs run 3: bias scan and stereotype-vector dose tests
+#                                    (docs/run3.md); run it again to resume
 #   bash run_experiment.sh status    current step, or DONE / FAILED / STOPPED
 #   bash run_experiment.sh attach    open the live view (leave it with Ctrl+B, then D)
 #   bash run_experiment.sh stop      stop it; finished work is kept, run again to resume
@@ -17,6 +19,8 @@
 #   MAX_INVALID, MAX_TRUNCATION, SKIP_GATE   GPU-check gate settings (GPU_RUNBOOK.md section 3)
 #   QA_FILE          capability QA file (default data/capability/qa.jsonl; empty to skip)
 #   TORCH_INDEX_URL  PyTorch wheel index (default CUDA 12.8 builds, needed for Blackwell)
+#   PUSH_RESULTS     1 (default): commit and push the results ZIP when a campaign finishes;
+#                    0: keep it on disk only. Pushing needs saved Git credentials (GPU_RUNBOOK.md)
 set -euo pipefail
 cd "$(dirname "$0")"
 SESSION=steerquant
@@ -91,8 +95,9 @@ case "${1:-start}" in
     exit 0 ;;
   start) ;;
   dose) CAMPAIGN=scripts/run_dose.sh ;;
+  run3) CAMPAIGN=scripts/run_run3.sh ;;
   *)
-    echo "Usage: bash run_experiment.sh [start|dose|status|attach|stop]"
+    echo "Usage: bash run_experiment.sh [start|dose|run3|status|attach|stop]"
     exit 1 ;;
 esac
 
@@ -136,7 +141,7 @@ fi
 # A finished, failed or stopped earlier session is replaced; the campaign resumes from its records.
 tmux kill-session -t "$SESSION" 2>/dev/null || true
 settings=(-e "QA_FILE=${QA_FILE-data/capability/qa.jsonl}")
-for var in HF_HOME HF_TOKEN MAX_INVALID MAX_TRUNCATION SKIP_GATE TORCH_INDEX_URL CAMPAIGN; do
+for var in HF_HOME HF_TOKEN MAX_INVALID MAX_TRUNCATION SKIP_GATE TORCH_INDEX_URL CAMPAIGN PUSH_RESULTS; do
   if [[ -n ${!var:-} ]]; then settings+=(-e "$var=${!var}"); fi
 done
 tmux new-session -d -s "$SESSION" -c "$PWD" "${settings[@]}" "bash run_experiment.sh __window"

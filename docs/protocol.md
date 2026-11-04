@@ -26,6 +26,7 @@ This construction deliberately learns **evidence following**. It may capture gen
 - Generation stops on every stop ID in the checkpoint's generation config, with the tokenizer's EOS as fallback. Truncation detection uses the same list. Gemma needs this to stop at end-of-turn.
 - Layer index is zero-based decoder block OUTPUT, before the next block/final normalization.
 - Extraction uses the last answer token after appending positive/negative answer letters to the same rendered chat prompt. The positive-minus-negative mean is accumulated in FP32 and unit-normalized.
+- The answer pair is set by `steering.contrast`. `evidence` (runs 1 and 2, and the default) contrasts gold with a wrong named answer. `stereotype` (run 3) contrasts the other named answer with BBQ's stereotype-consistent target, never uses "unknown", and ignores gold; see `docs/run3.md`. Configs without the setting keep their identity.
 - Calibration is the average L2 norm of the unsteered final **prompt** token at that block over extraction examples.
 - Intervention is `h_last += alpha * reference_activation_scale * unit_vector`.
 - The scale comes from the floating-point reference for all precisions and vector sources, so extraction-norm changes do not silently change the intervention dose.
@@ -43,7 +44,7 @@ Quantization scheme and bit width are confounded in this first deployment compar
 
 ## Evaluation and selection
 
-Greedy decoding, identical prompt format per condition, fixed max-new-token budget. A response must be a standalone permitted letter, optionally parentheses/terminal punctuation. Explanations, refusals, and malformed answers are invalid and count as incorrect; they are retained verbatim for auditing. Invalidity is not assumed to be a refusal. Token-cap truncation is a separate diagnostic.
+Greedy decoding, identical prompt format per condition, fixed max-new-token budget. A response must be a standalone permitted letter, optionally parentheses/terminal punctuation. From run 3, a letter followed by exactly its own option's text (for example "B. Can't answer") also counts as that letter; a letter with any other text stays invalid, and each answer records which form it used. Runs 1 and 2 used the letter-only rule and are not rescored. Explanations, refusals, and malformed answers are invalid and count as incorrect; they are retained verbatim for auditing. Invalidity is not assumed to be a refusal. Token-cap truncation is a separate diagnostic.
 
 Metrics include ambiguous/disambiguated accuracy, invalidity, truncation, unknown rate, stereotypical error rate, and signed BBQ scores. Signed scores can cancel across groups, so they are secondary to the decomposed outcomes. Official-style conditional bias excludes unknown and invalid predictions; ambiguous bias additionally scales by valid annotated accuracy. Raw denominators and annotation coverage are explicit. All-unknown ambiguous answers yield zero scaled bias but undefined conditional bias. All-invalid outputs yield null bias, not zero.
 

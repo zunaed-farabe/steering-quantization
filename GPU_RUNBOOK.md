@@ -12,20 +12,42 @@ bash run_experiment.sh
 
 That single script installs whatever is missing, then runs every step below in order inside a tmux session. You can disconnect and turn off the computer you connected from (section 2).
 
-## Current step: BF16 dose finding
+## Current step: run 3
 
-Run 1 changed almost no answers, so the next step is a BF16-only test on Qwen and Gemma before any quantization. It uses the same machine setup as section 0. Its rule and how to read the result are in [docs/dose-finding.md](docs/dose-finding.md).
+Run 2's dose finding failed on both models (`RESULTS.md`). Run 3 tests a vector that targets the stereotype instead of "unknown", on Race and Gender, and scans six other categories for bias. It is BF16 and validation only. The plan and its fixed rules are in [docs/run3.md](docs/run3.md). Expect about 5 to 6 hours.
 
-Gemma is gated. Accept its terms at https://huggingface.co/google/gemma-2-9b-it, then create a read token and add it to `steerquant.env`:
+**First time only (logs are no longer tracked in git):**
 
 ```bash
+cd /workspace/farabe/steering-quantization
+cp -a logs ../logs-backup-$(date +%F)   # keep a copy; run 1 and 2 logs are also inside their result ZIPs
+git checkout -- logs/                   # drop local edits to the old tracked log copies
 git pull
-cp -n steerquant.env.example steerquant.env   # keeps an existing file
-nano steerquant.env                           # add HF_TOKEN=hf_...
-bash run_experiment.sh dose
 ```
 
-It runs in the same tmux session: `status`, `attach` and `stop` work as in section 2, and `bash run_experiment.sh dose` resumes it. Nothing from the first campaign is reused or changed. The verdicts are `reports/dose-qwen/verdict.md` and `reports/dose-gemma/verdict.md`, and the zip is `dose-results-<time>.zip`.
+Set up pushing once, too, as described in "Pushing from this machine" below. Then start it:
+
+```bash
+bash run_experiment.sh run3
+```
+
+It runs in the same tmux session, where `status`, `attach` and `stop` work as in section 2, and running `bash run_experiment.sh run3` again resumes it. When it finishes, it commits **only** `run3-results-<time>.zip` and pushes it, so you don't need to push by hand. The status line says whether the push worked. The verdicts are `reports/run3-dose-<model>-<category>/verdict.md`, and the bias scan is `reports/run3-scan/scan.md`.
+
+## Pushing from this machine
+
+Every campaign pushes its results archive when it finishes. Set `PUSH_RESULTS=0` in `steerquant.env` to keep it on disk instead. Pushing uses HTTPS with a GitHub token that can reach only this repository, so no SSH key is needed:
+
+1. On GitHub: Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate new token. Set **Repository access** to only `steering-quantization`, **Permissions** to Contents: **Read and write**, and choose an expiry.
+2. On this machine:
+
+   ```bash
+   git remote set-url origin https://github.com/zunaed-farabe/steering-quantization.git
+   git config --global credential.helper store
+   git fetch          # username: your GitHub username; password: paste the token
+   chmod 600 ~/.git-credentials
+   ```
+
+After that, `git pull` and `git push` stop asking. The token is stored in plain text in `~/.git-credentials`, limited to this one repository; revoke it on GitHub, or delete that file, to remove access. The runner never asks for a password: if the credentials are missing or expired, the push fails fast, the run still ends as DONE, and the status line gives the command to push by hand.
 
 ## 0. Prepare the machine (once)
 
@@ -83,7 +105,7 @@ The script sets up the environment if needed and starts the experiment in a tmux
 4. Runs the **main campaign**: locks the model revision, extracts vectors and runs the full validation sweep for BF16, then INT8, then NF4. That is 54 conditions × 1,240 questions = 66,960 generations.
 5. Writes the validation report, **freezes the selection**, runs the held-out **test** split once at the frozen settings, and writes the test report.
 6. Runs the bundled capability suite (2,000 questions, section 5) at the same frozen settings.
-7. Packages everything into `steering-results-<UTC time>.zip` in the project folder.
+7. Packages everything into `steering-results-<UTC time>.zip` in the project folder, then commits only that file and pushes it (see "Pushing from this machine").
 
 No runtime has been measured yet. Expect many hours; LLM.int8() is the slowest precision.
 
@@ -101,7 +123,7 @@ Each stage also has its own log at `logs/<stage>.log`.
 - **To resume** after stopping, a failure, a reboot or a power cut, run `bash run_experiment.sh` again. Finished stages are skipped. Interrupted evaluations continue where they stopped (`--resume`). A finished vector, lock file, selection or report is never recomputed or overwritten.
 - **After a reboot,** tmux sessions are gone. Just run `bash run_experiment.sh` again.
 
-Do not `git pull`, edit source, configs, package versions or data between starting and finishing. Those changes alter run identities and comparability. If a change is unavoidable, use a fresh artifact root and document it as a new campaign.
+Do not `git pull`, edit source, configs, package versions or data between starting and finishing. (The runner's own push at the very end may pull first; all experiments are finished by then.) Those changes alter run identities and comparability. If a change is unavoidable, use a fresh artifact root and document it as a new campaign.
 
 ## 3. The GPU-check gate
 
@@ -199,7 +221,7 @@ steerquant summarize --config configs/qwen_gender.locked.json --split capability
 
 ## 6. Return the results
 
-The unattended runner creates `steering-results-<UTC time>.zip` at the end. Manually: `python scripts/package_results.py --output steering-results.zip`. It contains both artifact roots, reports, logs, locked configs, data provenance and a hash inventory. It excludes the environment, the model cache and synthetic smoke outputs. Pass `--artifact-root path` for each nondefault artifact root.
+The unattended runner creates `steering-results-<UTC time>.zip` at the end and pushes it. Manually: `python scripts/package_results.py --output steering-results.zip`. It contains both artifact roots, reports, logs, locked configs, data provenance and a hash inventory. It excludes the environment, the model cache and synthetic smoke outputs. Pass `--artifact-root path` for each nondefault artifact root.
 
 Include a short note: whether all stages finished, the GPU type, and any failures or intentional deviations (including a `SKIP_GATE` decision). A failed or partial run is worth returning. Raw predictions and vector metadata are needed to audit the study, so do not send only CSV rows or screenshots.
 

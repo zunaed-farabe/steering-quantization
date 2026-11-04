@@ -148,7 +148,7 @@ def prepare(raw_path, destination, metadata_path=None, seed=42):
     return manifest
 
 
-def load_split(prepared, split, limit=None, seed=42):
+def load_split(prepared, split, limit=None, seed=42, require_target=False):
     manifest = read_json(Path(prepared) / "manifest.json")
     check = dict(manifest)
     fingerprint = check.pop("fingerprint")
@@ -159,6 +159,9 @@ def load_split(prepared, split, limit=None, seed=42):
         if file_hash(Path(prepared) / f"{name}.jsonl") != info["sha256"]:
             raise ValueError(f"Prepared {name} split does not match its manifest")
     rows = read_jsonl(Path(prepared) / f"{split}.jsonl")
+    if require_target:
+        # Before sampling, so a training budget is spent only on rows that can form pairs.
+        rows = [r for r in rows if r["target"] is not None]
     if limit is not None and limit < len(rows):
         if split == "train":
             # Sample across training scenarios and evidence/polarity strata. A small
@@ -237,6 +240,37 @@ def contrastive_pairs(rows):
                     yield {"id": row["id"], "group": row["group"], "prompt": prompt(item),
                            "positive": LETTERS[item["gold"]], "negative": LETTERS[wrong],
                            "condition": row["context_condition"], "order": list(order)}
+
+
+def stereotype_pairs(rows):
+    """The other named answer vs the stereotype-consistent one, over all three letter positions.
+
+    BBQ's target is already polarity-adjusted: for a negative question it names the
+    stereotyped group, for a non-negative question the other group. So target is the
+    biased answer in both cases. "Unknown" is never part of a pair, so the vector cannot
+    become an abstention direction, and gold is ignored: in disambiguated contexts gold
+    agrees with the stereotype half the time, so following evidence cancels out.
+    Rows without a target are skipped.
+    """
+    for row in rows:
+        if row["target"] is None:
+            continue
+        other = [i for i in range(3) if i not in (row["target"], row["unknown"])]
+        if len(other) != 1:
+            raise ValueError(f"Expected exactly one non-target named answer: {row['id']}")
+        for order in ((0, 1, 2), (1, 2, 0), (2, 0, 1)):
+            item = permute(row, order)
+            yield {"id": row["id"], "group": row["group"], "prompt": prompt(item),
+                   "positive": LETTERS[order.index(other[0])], "negative": LETTERS[item["target"]],
+                   "condition": row["context_condition"], "order": list(order)}
+
+
+def pairs_for(contrast, rows):
+    if contrast == "evidence":
+        return list(contrastive_pairs(rows))
+    if contrast == "stereotype":
+        return list(stereotype_pairs(rows))
+    raise ValueError(f"Unknown contrast: {contrast}")
 
 
 def load_capability(path):

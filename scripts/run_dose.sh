@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # BF16 dose finding on Qwen and Gemma, validation split only:
 #   environment check -> offline tests -> Gemma access check
-#   -> for each model: vectors, 50-condition sweep, report, verdict -> results ZIP
+#   -> for each model: vectors, 50-condition sweep, report, verdict -> results ZIP -> push it
 # A FAIL verdict is a result, not an error, so the run still finishes and packages.
 # Start it with `bash run_experiment.sh dose`. Running that again resumes.
 set -Eeuo pipefail
@@ -26,7 +26,5 @@ for model in qwen gemma; do
   stage "dose-$model-verdict" steerquant dose-check --config "$config.locked.json" --output "reports/dose-$model/verdict.json"
 done
 
-ZIP="dose-results-$(date -u +%Y%m%dT%H%M%SZ).zip"
-stage dose-package python scripts/package_results.py --output "$ZIP" --only dose \
+finish dose "Verdicts: reports/dose-qwen/verdict.md, reports/dose-gemma/verdict.md" --only dose \
   --artifact-root artifacts/dose-qwen --artifact-root artifacts/dose-gemma
-status "DONE. Verdicts: reports/dose-qwen/verdict.md, reports/dose-gemma/verdict.md. Results archive: $ZIP"

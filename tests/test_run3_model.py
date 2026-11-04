@@ -1,0 +1,105 @@
+"""Run 3 on the tiny offline model, and the runner's commit-and-push step on a local remote."""
+
+import os
+import shutil
+import subprocess
+from copy import deepcopy
+from pathlib import Path
+
+import pytest
+import torch
+
+import steerquant.dose as dose
+from steerquant.experiments import evaluate
+from steerquant.io import read_json, read_jsonl
+from steerquant.scan import scan
+from steerquant.smoke import setup_smoke
+from steerquant.steering import extract, load_vectors
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.fixture
+def smoke_config(tmp_path):
+    torch.set_num_threads(1)
+    return setup_smoke(tmp_path / "smoke")
+
+
+def test_stereotype_vector_differs_from_evidence_and_records_its_geometry(smoke_config, tmp_path):
+    evidence = deepcopy(smoke_config)
+    evidence["output"]["root"] = str(tmp_path / "evidence")
+    stereotype = deepcopy(smoke_config)
+    stereotype["steering"]["contrast"] = "stereotype"
+    stereotype["output"]["root"] = str(tmp_path / "stereotype")
+    old, new = load_vectors(extract(evidence, "fp32")), load_vectors(extract(stereotype, "fp32"))
+    assert old["metadata"]["contrast"] == "evidence" and old["metadata"]["diagnostics"] == {}
+    assert new["metadata"]["contrast"] == "stereotype"
+    cosine = new["metadata"]["diagnostics"]["cosine_with_evidence_direction"]["0"]
+    assert -1 <= cosine <= 1
+    assert cosine == pytest.approx(float(new["vectors"]["0"] @ old["vectors"]["0"]), abs=1e-5)
+    assert float(new["vectors"]["0"] @ old["vectors"]["0"]) < 0.999
+
+    evaluate(stereotype, "fp32")
+    rows = read_jsonl(next((tmp_path / "stereotype" / "runs" / "validation").glob("*/predictions.jsonl")))
+    assert all("answer_format" in r for r in rows)
+    result = dose.verdict(stereotype, bootstrap=50)
+    assert result["contrast"] == "stereotype"
+    assert result["vector_diagnostics"]["cosine_with_evidence_direction"]["0"] == pytest.approx(cosine)
+    assert result["direction_check"]["negative_settings"] == 1
+
+
+def test_baseline_only_scan_needs_no_vectors(smoke_config, tmp_path):
+    config = deepcopy(smoke_config)
+    config["steering"].update(sources=[], layers=[], strengths=[0.0])
+    config["output"]["root"] = str(tmp_path / "scan-root")
+    runs = evaluate(config, "fp32")
+    assert len(runs) == 2 and not (tmp_path / "scan-root" / "vectors").exists()
+    for run in runs:
+        assert read_json(Path(run) / "run.json")["identity"]["reference_vector_sha256"] is None
+    scan([config], tmp_path / "scan.json")
+    assert (tmp_path / "scan.md").read_text(encoding="utf-8").count("| Synthetic |") == 1
+
+
+def git(cwd, *args):
+    return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout
+
+
+@pytest.mark.skipif(not all(shutil.which(t) for t in ("bash", "flock", "git")), reason="needs Linux bash, flock and git")
+def test_finish_pushes_only_the_archive_and_a_failed_push_never_fails_the_campaign(tmp_path):
+    remote, work = tmp_path / "remote.git", tmp_path / "work"
+    subprocess.run(["git", "init", "-q", "--bare", str(remote)], check=True)
+    (work / "scripts").mkdir(parents=True)
+    git(work, "init", "-q")
+    git(work, "config", "user.email", "runner@example.invalid")
+    git(work, "config", "user.name", "Runner")
+    shutil.copy(ROOT / "scripts/campaign_lib.sh", work / "scripts/campaign_lib.sh")
+    (work / "scripts/package_results.py").write_text(
+        "import sys\nopen(sys.argv[sys.argv.index('--output') + 1], 'wb').write(b'results')\n")
+    (work / "notes.txt").write_text("tracked\n")
+    git(work, "add", "-A")
+    git(work, "commit", "-q", "-m", "start")
+    git(work, "remote", "add", "origin", str(remote))
+    git(work, "push", "-q", "-u", "origin", "HEAD")
+    (work / "notes.txt").write_text("edited, must not be committed\n")
+    (work / "stray.txt").write_text("untracked, must not be committed\n")
+
+    def finish(name):
+        script = f'set -Eeuo pipefail; RESUME=resume; source scripts/campaign_lib.sh; finish {name} "Done here" --only {name}'
+        done = subprocess.run(["bash", "-c", script], cwd=work, capture_output=True, text=True,
+                              env={"PATH": os.environ["PATH"], "HOME": str(tmp_path), "PUSH_RETRY_SECONDS": "0"})
+        return done.returncode, (work / "logs/campaign-status.txt").read_text()
+
+    code, status = finish("demo")
+    assert code == 0 and "pushed to GitHub" in status
+    zips = sorted(p.name for p in work.glob("demo-results-*.zip"))
+    assert len(zips) == 1
+    pushed = git(work, "--git-dir", str(remote), "show", "--name-only", "--format=%s", "HEAD").split()
+    assert pushed[:2] == ["Results:", zips[0]] and pushed[-1] == zips[0] and "notes.txt" not in pushed
+    assert "edited" in (work / "notes.txt").read_text()
+
+    code, status = finish("demo")  # resuming a finished campaign reuses its archive
+    assert code == 0 and sorted(p.name for p in work.glob("demo-results-*.zip")) == zips
+
+    git(work, "remote", "set-url", "origin", str(tmp_path / "missing.git"))
+    code, status = finish("other")
+    assert code == 0 and "NOT pushed" in status

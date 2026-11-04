@@ -16,6 +16,16 @@ DEFAULTS = {
     "evaluation": {"max_new_tokens": 12, "fairness_prompt": False, "include_prompt_baseline": True},
     "output": {"root": "artifacts/gender-seed42"},
 }
+# Options accepted when given but never filled in, so configs written before an option
+# existed keep their identity (config_id) and their existing artifacts stay valid.
+OPTIONAL = {"steering": {"contrast": "evidence"}}
+CONTRASTS = {"evidence", "stereotype"}
+
+
+def contrast(config):
+    """Which answer pair the vector contrasts (docs/run3.md): 'evidence' is gold vs a wrong
+    named answer (runs 1 and 2); 'stereotype' is the other named answer vs the stereotyped one."""
+    return config["steering"].get("contrast", OPTIONAL["steering"]["contrast"])
 
 
 def load_config(path):
@@ -27,7 +37,7 @@ def load_config(path):
         if key not in config:
             raise ValueError(f"Unknown configuration key: {key}")
         if isinstance(config[key], dict):
-            if not isinstance(value, dict) or set(value) - set(config[key]):
+            if not isinstance(value, dict) or set(value) - set(config[key]) - set(OPTIONAL.get(key, {})):
                 raise ValueError(f"Unknown or invalid options in {key}")
             config[key].update(value)
         else:
@@ -46,7 +56,8 @@ def validate(c):
         raise ValueError("The first precision must be the floating-point reference")
     if c["model"]["compute_dtype"] not in {"bfloat16", "float16", "float32"}:
         raise ValueError("Unsupported compute dtype")
-    if not c["steering"]["layers"] or any(type(n) is not int or n < 0 for n in c["steering"]["layers"]):
+    # A baseline-only scan (no vector sources) needs no layers.
+    if (c["steering"]["sources"] and not c["steering"]["layers"]) or any(type(n) is not int or n < 0 for n in c["steering"]["layers"]):
         raise ValueError("Layers are zero-based nonnegative block indices")
     if len(set(c["steering"]["layers"])) != len(c["steering"]["layers"]):
         raise ValueError("Layer indices must be distinct")
@@ -56,6 +67,8 @@ def validate(c):
         raise ValueError("Unknown vector source")
     if len(set(c["steering"]["sources"])) != len(c["steering"]["sources"]):
         raise ValueError("Vector sources must be distinct")
+    if contrast(c) not in CONTRASTS:
+        raise ValueError(f"steering.contrast must be one of {sorted(CONTRASTS)}")
     import math
     if not c["steering"]["strengths"] or any(not math.isfinite(float(a)) for a in c["steering"]["strengths"]):
         raise ValueError("Steering strengths must be finite")

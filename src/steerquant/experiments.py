@@ -8,7 +8,7 @@ import torch
 from .config import artifact_root, config_id
 from .data import load_capability, load_split, prompt
 from .io import digest, environment, file_hash, read_json, read_jsonl, write_json
-from .metrics import metrics, parse_answer
+from .metrics import answer_format, metrics, parse_answer
 from .models import Backend
 from .steering import check_vectors, intervene, load_vectors, random_direction, vector_path
 
@@ -70,16 +70,21 @@ def evaluate(config, precision, split="validation", selection_path=None, resume=
         conditions = validation_conditions(config, precision)
     reference = config["precisions"][0]
     reference_path = vector_path(config, reference)
-    ref_vectors = load_vectors(reference_path)
+    # A baseline-only bias scan configures no vector sources, extracts nothing and loads nothing.
+    uses_vectors = bool(config["steering"]["sources"])
+    if not uses_vectors and any(c["layer"] is not None for c in conditions):
+        raise ValueError("Steered condition requested but no vector sources are configured")
+    ref_vectors = load_vectors(reference_path) if uses_vectors else None
     native_path = vector_path(config, precision)
     native = load_vectors(native_path) if any(c["source"] == "native" for c in conditions) else None
-    if ref_vectors["metadata"]["model"]["precision"] != reference:
+    if ref_vectors and ref_vectors["metadata"]["model"]["precision"] != reference:
         raise ValueError("Reference artifact has the wrong extraction precision")
     if native and native["metadata"]["model"]["precision"] != precision:
         raise ValueError("Native artifact has the wrong extraction precision")
     backend = Backend(config, precision)
     try:
-        check_vectors(ref_vectors, backend, data_manifest, config)
+        if ref_vectors:
+            check_vectors(ref_vectors, backend, data_manifest, config)
         if native:
             check_vectors(native, backend, data_manifest, config)
         env = environment()
@@ -102,7 +107,7 @@ def evaluate(config, precision, split="validation", selection_path=None, resume=
                         "examples_sha256": digest(rows), "model": backend.identity, "condition": condition,
                         "split": split, "selection_fingerprint": selection_hash,
                         "capability_file_sha256": file_hash(qa_path) if qa_path else None,
-                        "vector_sha256": vector_hash, "reference_vector_sha256": file_hash(reference_path),
+                        "vector_sha256": vector_hash, "reference_vector_sha256": file_hash(reference_path) if ref_vectors else None,
                         "magnitude": strength * scale, "source_sha256": env["source_sha256"],
                         "packages": env["packages"], "runtime": backend.runtime}
             run_id = digest(identity)
@@ -142,8 +147,10 @@ def evaluate(config, precision, split="validation", selection_path=None, resume=
                     with intervene(target_layer, vector, strength * scale):
                         text, tokens = backend.generate(prompt(row, config["evaluation"]["fairness_prompt"] or source == "prompt"))
                     truncated = len(tokens) >= config["evaluation"]["max_new_tokens"] and bool(tokens) and tokens[-1] not in backend.eos_token_ids
+                    choices = len(row["answers"])
                     result = {**row, "raw_output": text, "generated_tokens": tokens,
-                              "prediction": parse_answer(text, len(row["answers"])), "truncated": truncated}
+                              "prediction": parse_answer(text, choices, row["answers"]),
+                              "answer_format": answer_format(text, choices, row["answers"]), "truncated": truncated}
                     stream.write(json.dumps(result, sort_keys=True, allow_nan=False) + "\n")
                     stream.flush()
                     previous.append(result)

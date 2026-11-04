@@ -8,8 +8,9 @@ that frozen selection uses. Reads validation runs only.
 from pathlib import Path
 
 from .analysis import paired_interval
+from .config import artifact_root, contrast
 from .experiments import collect_runs
-from .io import write_json
+from .io import read_json, write_json
 from .metrics import transitions
 
 RULE = {"min_reduction": 0.01, "accuracy_drop": 0.02, "unknown_increase": 0.02, "invalid_increase": 0.01,
@@ -68,10 +69,20 @@ def verdict(config, rule=RULE, bootstrap=2000):
             "disambig_accuracy": base["disambig"]["accuracy"], "disambig_unknown_rate": base["disambig"]["unknown_rate"],
             "invalid_rate": base["overall"]["invalid_rate"], "truncation_rate": base["overall"]["truncation_rate"],
             "prompt_stereotyped_rate": rate(prompt[1]) if prompt else None}
+    # Diagnostics only, never part of the verdict. For the stereotype contrast, a negative
+    # strength pushes toward the stereotype, so a real stereotype direction should raise
+    # stereotyped answers there more than random does (interval above zero).
+    toward = [s for s in settings if s["strength"] < 0]
+    direction_check = {"negative_settings": len(toward),
+                       "raise_more_than_random": sum(bool(s["versus_random"]["ci95"]) and s["versus_random"]["ci95"][0] > 0 for s in toward),
+                       "lower_more_than_random": sum(bool(s["versus_random"]["ci95"]) and s["versus_random"]["ci95"][1] < 0 for s in toward)}
+    vector_meta = artifact_root(config) / "vectors" / f"{precision}.json"
+    geometry = read_json(vector_meta).get("diagnostics", {}) if vector_meta.exists() else {}
     scoreable = (room["invalid_rate"] <= rule["max_baseline_invalid"]
                  and room["truncation_rate"] <= rule["max_baseline_truncation"])
     passing = [s for s in settings if s["passed"]]
     return {"schema": 1, "model": config["model"]["id"], "precision": precision, "rule": rule,
+            "contrast": contrast(config), "direction_check": direction_check, "vector_diagnostics": geometry,
             "verdict": "NOT_SCOREABLE" if not scoreable else "PASS" if passing else "FAIL",
             "passing_settings": len(passing), "settings_tested": len(settings), "baseline": room, "settings": settings}
 
@@ -91,6 +102,17 @@ def markdown(result):
         lines.append(f"| {s['layer']} | {s['strength']:+g} | {s['stereotyped_rate']:.3f} | {s['reduction']:+.3f} | {interval} | "
                      f"{s['changed_answers']} / {s['random_changed_answers']} | {', '.join(s['broken_limits']) or '—'} | "
                      f"{'yes' if s['passed'] else 'no'} |")
+    check = result.get("direction_check")
+    if check and check["negative_settings"]:
+        lines += ["", f"Direction check (diagnostic, not part of the verdict; contrast `{result.get('contrast')}`): at negative "
+                  f"strengths the vector raised stereotyped answers more than random in {check['raise_more_than_random']} of "
+                  f"{check['negative_settings']} settings and lowered them more than random in {check['lower_more_than_random']}. "
+                  "For the stereotype contrast, negative strengths push toward the stereotype."]
+    cosines = (result.get("vector_diagnostics") or {}).get("cosine_with_evidence_direction")
+    if cosines:
+        lines += ["", "Cosine with the run 2 evidence direction from the same training rows: "
+                  + ", ".join(f"layer {l} {c:+.2f}" for l, c in sorted(cosines.items(), key=lambda item: int(item[0])))
+                  + ". Near 1 would mean this vector is still mostly an abstention direction."]
     lines += ["", "Validation only and exploratory: settings are not corrected for multiple comparisons, and there is one random "
               "direction per layer. A pass names a candidate for the full study, not a finding."]
     return "\n".join(lines) + "\n"

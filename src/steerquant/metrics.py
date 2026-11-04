@@ -4,15 +4,40 @@ import re
 from collections import Counter
 
 
-def parse_answer(text, choices=3):
-    # Accept only a standalone answer, optionally wrapped or with terminal punctuation.
-    # 'Cannot determine', 'Answer A or B', and explanations are invalid, not letter A.
+def normalized(text):
+    return " ".join(str(text).replace("’", "'").replace("‘", "'").casefold().split()).rstrip(".!")
+
+
+def parse_answer(text, choices=3, options=None):
+    """A standalone letter, optionally wrapped or with terminal punctuation.
+
+    With `options`, also a letter followed by exactly that option's text, such as
+    "B. Can't answer" (Gemma's habit). The text must match the letter's own option, so
+    "A. Unknown" when A is a person, explanations, and 'Answer A or B' stay invalid.
+    """
     if choices not in {2, 3, 4}:
         raise ValueError("Expected 2–4 choices")
     letters = "ABCD"[:choices]
     chars = letters + letters.lower()
     match = re.fullmatch(rf"\s*(?:\(([{chars}])\)|([{chars}]))[.!]?\s*", text)
-    return letters.index((match.group(1) or match.group(2)).upper()) if match else None
+    if match:
+        return letters.index((match.group(1) or match.group(2)).upper())
+    if options is not None:
+        if len(options) != choices:
+            raise ValueError("Options must match the number of choices")
+        match = re.fullmatch(rf"\s*(?:\(([{chars}])\)[.:]?|([{chars}])[.):])\s+(.+?)\s*", text, re.S)
+        if match:
+            index = letters.index((match.group(1) or match.group(2)).upper())
+            if normalized(match.group(3)) == normalized(options[index]):
+                return index
+    return None
+
+
+def answer_format(text, choices=3, options=None):
+    """How an answer was written: 'letter', 'letter_with_option', or None when invalid."""
+    if parse_answer(text, choices) is not None:
+        return "letter"
+    return "letter_with_option" if parse_answer(text, choices, options) is not None else None
 
 
 def rate(rows, predicate):

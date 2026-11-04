@@ -3,8 +3,8 @@ from pathlib import Path
 
 import torch
 
-from .config import artifact_root, config_id
-from .data import contrastive_pairs, load_split, prompt
+from .config import artifact_root, config_id, contrast
+from .data import load_split, pairs_for, prompt
 from .io import digest, environment, write_json
 from .models import Backend
 
@@ -60,46 +60,66 @@ def vector_path(config, precision):
     return artifact_root(config) / "vectors" / f"{precision}.pt"
 
 
+def mean_differences(backend, rows, pairs, indices, label):
+    """Unit mean-difference direction per layer, with its raw norm.
+
+    Each pair is positive-answer minus negative-answer activation at the answer token.
+    Average within examples first (ambiguity's two negatives must not double its
+    weight), then give ambiguous and disambiguated contexts equal weight.
+    """
+    per_example = {r["id"]: {l: torch.zeros(backend.identity["hidden_size"]) for l in indices} for r in rows}
+    counts = {r["id"]: 0 for r in rows}
+    for n, pair in enumerate(pairs):
+        states = []
+        for answer in (pair["positive"], pair["negative"]):
+            with capture(backend.layers, indices) as values, torch.inference_mode():
+                backend.model(**backend.encode(pair["prompt"], answer), use_cache=False)
+            states.append(dict(values))
+        for l in indices:
+            per_example[pair["id"]][l] += states[0][l] - states[1][l]
+        counts[pair["id"]] += 1
+        if (n + 1) % 50 == 0:
+            print(f"extract {label}: {n + 1}/{len(pairs)} pairs", flush=True)
+    if any(counts[r["id"]] == 0 for r in rows):
+        raise ValueError("Every extraction row needs at least one contrastive pair")
+    directions, norms = {}, {}
+    for l in indices:
+        by_condition = []
+        for condition in ("ambig", "disambig"):
+            examples = [per_example[r["id"]][l] / counts[r["id"]] for r in rows if r["context_condition"] == condition]
+            if not examples:
+                raise ValueError("Extraction requires both ambiguous and disambiguated examples")
+            by_condition.append(torch.stack(examples).mean(0))
+        direction = torch.stack(by_condition).mean(0)
+        norm = direction.norm().item()
+        if norm < 1e-8 or not torch.isfinite(direction).all():
+            raise ValueError("Degenerate extraction direction")
+        directions[str(l)] = direction / norm
+        norms[str(l)] = norm
+    return directions, norms
+
+
 def extract(config, precision):
     path = vector_path(config, precision)
     if path.exists():
         raise ValueError(f"Vector artifact already exists: {path}")
-    rows, manifest = load_split(config["data"]["prepared"], "train", config["data"]["train_limit"], config["seed"])
-    pairs = list(contrastive_pairs(rows))
+    kind = contrast(config)
+    rows, manifest = load_split(config["data"]["prepared"], "train", config["data"]["train_limit"], config["seed"],
+                                require_target=kind == "stereotype")
+    pairs = pairs_for(kind, rows)
     if not pairs:
         raise ValueError("No contrastive training pairs")
     backend = Backend(config, precision)
     try:
         indices = config["steering"]["layers"]
-        # Average within examples first, so ambiguity's two negatives do not double its weight.
-        per_example = {r["id"]: {l: torch.zeros(backend.identity["hidden_size"]) for l in indices} for r in rows}
-        counts = {r["id"]: 0 for r in rows}
-        for n, pair in enumerate(pairs):
-            states = []
-            for answer in (pair["positive"], pair["negative"]):
-                with capture(backend.layers, indices) as values, torch.inference_mode():
-                    backend.model(**backend.encode(pair["prompt"], answer), use_cache=False)
-                states.append(dict(values))
-            for l in indices:
-                per_example[pair["id"]][l] += states[0][l] - states[1][l]
-            counts[pair["id"]] += 1
-            if (n + 1) % 50 == 0:
-                print(f"extract {precision}: {n + 1}/{len(pairs)} pairs", flush=True)
-        directions, norms, scales = {}, {}, {}
-        for l in indices:
-            # Equal weight to ambiguous and disambiguated conditions.
-            by_condition = []
-            for condition in ("ambig", "disambig"):
-                examples = [per_example[r["id"]][l] / counts[r["id"]] for r in rows if r["context_condition"] == condition]
-                if not examples:
-                    raise ValueError("Extraction requires both ambiguous and disambiguated examples")
-                by_condition.append(torch.stack(examples).mean(0))
-            direction = torch.stack(by_condition).mean(0)
-            norm = direction.norm().item()
-            if norm < 1e-8 or not torch.isfinite(direction).all():
-                raise ValueError("Degenerate extraction direction")
-            directions[str(l)] = direction / norm
-            norms[str(l)] = norm
+        directions, norms = mean_differences(backend, rows, pairs, indices, f"{precision} {kind}")
+        diagnostics = {}
+        if kind != "evidence":
+            # Run 2's vector, from the same rows: a cosine near 1 would mean this is still
+            # mostly an abstention direction. Diagnostic only; it is never applied.
+            evidence, _ = mean_differences(backend, rows, pairs_for("evidence", rows), indices, f"{precision} evidence check")
+            diagnostics["cosine_with_evidence_direction"] = {l: float(directions[l] @ evidence[l]) for l in directions}
+        scales = {}
         calibration = {l: [] for l in indices}
         for row in rows:
             with capture(backend.layers, indices) as values, torch.inference_mode():
@@ -114,7 +134,8 @@ def extract(config, precision):
         meta = {"schema": 1, "config_id": config_id(config), "model": backend.identity,
                 "data_fingerprint": manifest["fingerprint"], "seed": config["seed"],
                 "training_ids": [r["id"] for r in rows], "pairs_sha256": digest(pairs), "pairs": len(pairs),
-                "method": "mean_difference", "site": "block_output", "extraction_position": "last_answer_token",
+                "method": "mean_difference", "contrast": kind, "diagnostics": diagnostics,
+                "site": "block_output", "extraction_position": "last_answer_token",
                 "calibration_position": "last_prompt_token", "raw_vector_norms": norms,
                 "activation_scales": scales, "runtime": backend.runtime, "environment": environment()}
         path.parent.mkdir(parents=True, exist_ok=True)

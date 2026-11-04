@@ -104,12 +104,12 @@ These came from a breakdown after the run, so they are not tested by the pass ru
 3. **INT8 alone shifts Qwen toward "unknown"** (run 1). This effect is real, but separate from steering.
 4. **The prompt instruction is a stronger bias reduction than any vector setting tried** on Qwen.
 
-## Recommended next step
+## Next step: run 3
 
-This is not run yet, and the choice is open.
-1. **Find where the bias is.** Run unsteered baselines on other BBQ categories, such as race, age, physical appearance and socioeconomic status, and pick the one with the most stereotyped answers.
-2. **Build a stereotype-specific vector.** Contrast the stereotyped named answer against the other named answer, leaving "unknown" out.
-3. **Repeat the dose run on that category** with the same pass rule.
+Run 3 is built but has not run yet. Its plan and rules are fixed in `docs/run3.md`:
+1. **A stereotype-specific vector.** It contrasts the other named answer with the stereotype-consistent one, and leaves "unknown" out.
+2. **Dose tests on Race and Gender,** with the same grid and pass rule as run 2. Only these two categories have enough validation scenarios (10 and 11) for the scenario bootstrap.
+3. **A descriptive bias scan** of the other six BBQ categories. They have 3–5 validation scenarios each.
 
 There is a fallback study if that fails: the current vector does shift "unknown" answers strongly at BF16, so whether that effect survives quantization is testable. It would need its own pass rule, written before running.
 

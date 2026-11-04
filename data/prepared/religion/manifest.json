@@ -1,0 +1,50 @@
+{
+  "fingerprint": "1e48fca799ac8bf61841502ea8cd1fb8268905ce489bec70365916b2c4954d40",
+  "grouping": "category + question_index",
+  "metadata_sha256": "f36708416b0e7adb81b47ad1926f9c39c2beb611702b73b01e06c9b6c9ffbd3d",
+  "raw_sha256": "cb9555f9f3454a52cd2df85956b59bd7fcca5aa922c8527693b1164d08417616",
+  "schema": 1,
+  "seed": 42,
+  "split_method": "identity-stratified, row-balanced scenario groups (60/20/20 rows per stratum)",
+  "splits": {
+    "test": {
+      "conditions": {
+        "ambig": 120,
+        "disambig": 120
+      },
+      "examples": 240,
+      "groups": 5,
+      "identity_strata": {
+        "all": 240
+      },
+      "sha256": "8f60d8d8019c36e7ea4f970db6c348180cb5abee89394ae31c0b3079ca4aaddd",
+      "target_annotated": 240
+    },
+    "train": {
+      "conditions": {
+        "ambig": 360,
+        "disambig": 360
+      },
+      "examples": 720,
+      "groups": 16,
+      "identity_strata": {
+        "all": 720
+      },
+      "sha256": "089b0b53570f33755f43b0f3a0e89f3663ce9200ef597d0c6c50fc7f749ae632",
+      "target_annotated": 720
+    },
+    "validation": {
+      "conditions": {
+        "ambig": 120,
+        "disambig": 120
+      },
+      "examples": 240,
+      "groups": 4,
+      "identity_strata": {
+        "all": 240
+      },
+      "sha256": "061b4d5a994f0818b28d5f4f1311a21a94922d8e88a44038d21d7c428b01c57b",
+      "target_annotated": 240
+    }
+  }
+}

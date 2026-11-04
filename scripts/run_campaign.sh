@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs the whole pilot unattended, in this order:
 #   environment check -> offline tests -> GPU check (BF16/INT8/NF4) -> go/no-go gate
-#   -> main validation sweep -> frozen selection -> held-out test -> capability -> results ZIP
+#   -> main validation sweep -> frozen selection -> held-out test -> capability -> results ZIP -> push it
 # Finished stages are detected and skipped, so running it again resumes after a
 # crash, reboot or power cut. Start it with `bash run_experiment.sh`, which runs
 # it inside tmux so it survives disconnecting.
@@ -85,7 +85,5 @@ if [[ -n $QA_FILE ]]; then
   summarize_once "$MAIN" capability reports/gender-capability main-capability-report
 fi
 
-# 7. Package everything to send back.
-ZIP="steering-results-$(date -u +%Y%m%dT%H%M%SZ).zip"
-stage package python scripts/package_results.py --output "$ZIP"
-status "DONE. Results archive: $ZIP"
+# 7. Package everything to send back, and push the archive to GitHub.
+finish steering "Main campaign finished"

@@ -15,8 +15,12 @@ reports/
 *.safetensors
 
 
-# Run-state markers and locks describe artifacts that are not in git; never commit them.
-logs/.done/
-logs/*.lock
+# Run logs, run-state markers and locks stay on the GPU machine: every campaign rewrites
+# them, they reach 1.5 GB, and they travel inside the results ZIP instead. A clean tree
+# is also what lets the runner pull and push unattended.
+logs/
+# Locked configs are written on the GPU machine at run time and archived in the ZIP.
+# (configs/qwen_gender_gpu_check.locked.json predates this and stays tracked.)
+configs/**/*.locked.json
 # Machine-specific settings (copy of steerquant.env.example); may hold a token.
 steerquant.env
