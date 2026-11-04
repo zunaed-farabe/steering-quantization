@@ -34,6 +34,8 @@ if [[ -f steerquant.env ]]; then
     value=${value%$'\r'}
     value=${value#"${value%%[![:space:]]*}"}; value=${value%"${value##*[![:space:]]}"}  # trim spaces
     value=${value#[\"\']}; value=${value%[\"\']}
+    # The SSH key passphrase is read only by the push step (scripts/campaign_lib.sh), never exported.
+    if [[ $key == github_passkey || $key == GITHUB_PASSKEY ]]; then continue; fi
     if [[ $key =~ ^[A-Za-z_][A-Za-z0-9_]*$ && -z ${!key+x} ]]; then export "$key=$value"; fi
   done < steerquant.env
 fi

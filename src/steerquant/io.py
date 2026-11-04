@@ -84,6 +84,8 @@ def load_env_file(path="steerquant.env"):
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = (part.strip() for part in line.split("=", 1))
+        if key in {"github_passkey", "GITHUB_PASSKEY"}:
+            continue  # the SSH key passphrase is for the runner's push step only
         if key and key not in os.environ:
             os.environ[key] = applied[key] = value.strip("\"'")
     return applied

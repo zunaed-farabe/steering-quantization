@@ -103,3 +103,31 @@ def test_finish_pushes_only_the_archive_and_a_failed_push_never_fails_the_campai
     git(work, "remote", "set-url", "origin", str(tmp_path / "missing.git"))
     code, status = finish("other")
     assert code == 0 and "NOT pushed" in status
+
+
+SSH_TOOLS = ("bash", "flock", "git", "ssh-agent", "ssh-add", "ssh-keygen", "timeout")
+
+
+@pytest.mark.skipif(not all(shutil.which(t) for t in SSH_TOOLS), reason="needs Linux bash, flock, git and OpenSSH")
+@pytest.mark.parametrize("line,unlocks", [("github_passkey='pa ss=wo#rd'", True), ("github_passkey=wrong", False)])
+def test_ssh_key_is_unlocked_from_the_env_file_without_ever_prompting(tmp_path, line, unlocks):
+    # A throwaway key in a temporary folder; the user's own keys and agent are never touched.
+    key = tmp_path / "key"
+    subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "pa ss=wo#rd", "-C", "throwaway", "-f", str(key)], check=True)
+    work = tmp_path / "work"
+    (work / "scripts").mkdir(parents=True)
+    git(work, "init", "-q")
+    git(work, "remote", "add", "origin", "git@example.invalid:someone/repo.git")
+    shutil.copy(ROOT / "scripts/campaign_lib.sh", work / "scripts/campaign_lib.sh")
+    (work / ".env").write_text(line + "\n")
+    script = ('set -Eeuo pipefail; RESUME=x; source scripts/campaign_lib.sh; '
+              'if unlock_ssh_key; then ssh-add -l; echo UNLOCKED; else echo LOCKED; fi; '
+              'pid=$OWN_AGENT; stop_own_agent; sleep 0.5; if kill -0 "$pid" 2>/dev/null; then echo AGENT_LEFT; fi')
+    done = subprocess.run(["bash", "-c", script], cwd=work, capture_output=True, text=True, timeout=120,
+                          stdin=subprocess.DEVNULL,
+                          env={"PATH": os.environ["PATH"], "HOME": str(tmp_path), "GITHUB_SSH_KEY": str(key)})
+    assert done.returncode == 0, done.stderr
+    assert ("UNLOCKED" in done.stdout) == unlocks
+    assert ("throwaway" in done.stdout) == unlocks
+    assert "AGENT_LEFT" not in done.stdout
+    assert "pa ss" not in done.stdout + done.stderr  # the passphrase is never printed

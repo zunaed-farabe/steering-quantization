@@ -35,7 +35,20 @@ It runs in the same tmux session, where `status`, `attach` and `stop` work as in
 
 ## Pushing from this machine
 
-Every campaign pushes its results archive when it finishes. Set `PUSH_RESULTS=0` in `steerquant.env` to keep it on disk instead. Pushing uses HTTPS with a GitHub token that can reach only this repository, so no SSH key is needed:
+Every campaign pushes its results archive when it finishes. Set `PUSH_RESULTS=0` in `steerquant.env` to keep it on disk instead. The runner never waits at a prompt: if it cannot authenticate, the push fails fast, the run still ends as DONE, and the status line gives the command to push by hand.
+
+**With the SSH key (current setup, remote `git@github.com:...`):** put the key's passphrase in `.env` or `steerquant.env` in this folder. Both are git-ignored and never archived.
+
+```bash
+echo "github_passkey='your passphrase'" >> .env   # single quotes keep spaces and symbols exactly
+chmod 600 .env
+```
+
+When pushing, the runner starts its own `ssh-agent`, unlocks `~/.ssh/id_ed25519` once with that passphrase, pushes, and stops the agent. Set `GITHUB_SSH_KEY` for a different key file. The passphrase is never passed on a command line, written to a log, or exported to the experiment's processes. A wrong passphrase fails at once.
+
+Your own `git pull` in the terminal still asks for the passphrase. To type it once per login instead, run `eval "$(ssh-agent -s)" && ssh-add`.
+
+**Or with an HTTPS token, which needs no SSH key:**
 
 1. On GitHub: Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate new token. Set **Repository access** to only `steering-quantization`, **Permissions** to Contents: **Read and write**, and choose an expiry.
 2. On this machine:
@@ -47,7 +60,7 @@ Every campaign pushes its results archive when it finishes. Set `PUSH_RESULTS=0`
    chmod 600 ~/.git-credentials
    ```
 
-After that, `git pull` and `git push` stop asking. The token is stored in plain text in `~/.git-credentials`, limited to this one repository; revoke it on GitHub, or delete that file, to remove access. The runner never asks for a password: if the credentials are missing or expired, the push fails fast, the run still ends as DONE, and the status line gives the command to push by hand.
+The token is stored in plain text in `~/.git-credentials`, limited to this one repository; revoke it on GitHub, or delete that file, to remove access.
 
 ## 0. Prepare the machine (once)
 

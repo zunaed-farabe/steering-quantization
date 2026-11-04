@@ -32,3 +32,5 @@ Checked on the laptop, with stand-in modules for PyTorch and Transformers: the r
 
 Not run here: `tests/test_run3_model.py` and the other tiny-model tests (they need PyTorch; the runner runs the whole suite first on the GPU machine), and anything on the real models.
 
+Pushing with an SSH key: the passphrase (`github_passkey` in `.env` or `steerquant.env`) unlocks the key in a private `ssh-agent` through a one-shot askpass helper, which is stopped after the push. Checked on the laptop: reading the passphrase from both files, including quoted values with spaces, `=`, `#` and quotes, Windows line endings, and a missing file. Not run here: the unlock itself, which `tests/test_run3_model.py` checks on the GPU machine with a throwaway key, a right passphrase and a wrong one.
+
